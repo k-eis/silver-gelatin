@@ -134,6 +134,16 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 
     <div class="controls">
       <div class="ctrl-group">
+        <div class="ctrl-label"><span class="name">CAMERA PATCH <span class="jp-small">実機の個性</span></span></div>
+        <div class="select-grid" id="patchGrid" style="grid-template-columns: 1fr 1fr;">
+          <div class="select-btn active" data-patch="init">初期化</div>
+          <div class="select-btn" data-patch="leicaMMono">Leica M Monochrom</div>
+          <div class="select-btn" data-patch="triX400">Kodak Tri-X 400</div>
+          <div class="select-btn" data-patch="ricohGR">Ricoh GR</div>
+        </div>
+      </div>
+
+      <div class="ctrl-group">
         <div class="ctrl-label"><span class="name">FILTER <span class="jp-small">色被り除去フィルター</span></span></div>
         <div class="select-grid" id="filterGrid">
           <div class="select-btn active" data-filter="none">None</div>

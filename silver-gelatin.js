@@ -7,6 +7,9 @@
 // 05 DETAIL       → 解像感（アンシャープマスク）
 // 06 TONE         → 調色（セピア・セレニウム・シアノタイプ）
 // 07 DODGE&BURN   → 覆い焼き・焼き込み（中心を明るく、周辺を暗く）
+//
+// CAMERA PATCH → 上記パラメータの組み合わせプリセット（実機の白黒表現の個性を再現）
+//   Leica M Monochrom / Kodak Tri-X 400 / Ricoh GR
 
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
@@ -40,6 +43,7 @@ const dodgeBurnVal = document.getElementById('dodgeBurnVal');
 
 const filterBtns = document.querySelectorAll('#filterGrid .select-btn');
 const toneBtns = document.querySelectorAll('#toneGrid .select-btn');
+const patchBtns = document.querySelectorAll('#patchGrid .select-btn');
 
 const downloadBtn = document.getElementById('downloadBtn');
 const resetBtn = document.getElementById('resetBtn');
@@ -171,6 +175,81 @@ function buildToneCurveLUT(black, shadow, midtone, highlight, white) {
   }
   return lut;
 }
+
+// ── CAMERA PATCH：実機の白黒表現の個性を、Silver Gelatinの7パラメータに翻訳したプリセット
+// 各値は思い込みではなく実機レビュー・作例の傾向を調べた上で設定している
+const CAMERA_PATCHES = {
+  init: {
+    filter: 'none', filterStrength: 70,
+    tc: { black: 50, shadow: 50, midtone: 50, highlight: 50, white: 50 },
+    paperGrade: 50, grain: 20, detail: 25,
+    tone: 'none', toneStrength: 30, dodgeBurn: 25
+  },
+  // Leica M Monochrom：カラーフィルターアレイのない専用センサー。階調は豊かでなだらか、
+  // 黒は浅め・ハイライトは白飛びしやすいため直後は"おとなしい"（後処理で生きる）のが実機の特徴
+  leicaMMono: {
+    filter: 'yellow', filterStrength: 20,
+    tc: { black: 60, shadow: 58, midtone: 54, highlight: 44, white: 45 },
+    paperGrade: 48, grain: 5, detail: 65,
+    tone: 'none', toneStrength: 0, dodgeBurn: 10
+  },
+  // Kodak Tri-X 400：豊かな黒、コントラストの強い中間調、ハイライトのディテールは残る、
+  // 独特の有機的な粒状感が持ち味の報道写真フィルム
+  triX400: {
+    filter: 'yellow', filterStrength: 40,
+    tc: { black: 48, shadow: 38, midtone: 54, highlight: 62, white: 54 },
+    paperGrade: 62, grain: 55, detail: 38,
+    tone: 'none', toneStrength: 0, dodgeBurn: 30
+  },
+  // Ricoh GR：シャドウを潰しハイライトで魅せる"ハイコントラスト白黒"設定が定番。
+  // シャープネス・クラリティ・周辺減光を強めに焼き込むスナップシューター的な硬さ
+  ricohGR: {
+    filter: 'red', filterStrength: 25,
+    tc: { black: 50, shadow: 25, midtone: 45, highlight: 55, white: 52 },
+    paperGrade: 72, grain: 35, detail: 60,
+    tone: 'none', toneStrength: 0, dodgeBurn: 55
+  }
+};
+
+function applyPatch(patch) {
+  const p = CAMERA_PATCHES[patch];
+  if (!p) return;
+
+  currentFilter = p.filter;
+  filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === p.filter));
+  filterStrengthSlider.value = p.filterStrength;
+  filterStrengthVal.textContent = p.filterStrength + '%';
+
+  tcBlackSlider.value = p.tc.black; tcBlackVal.textContent = p.tc.black + '%';
+  tcShadowSlider.value = p.tc.shadow; tcShadowVal.textContent = p.tc.shadow + '%';
+  tcMidtoneSlider.value = p.tc.midtone; tcMidtoneVal.textContent = p.tc.midtone + '%';
+  tcHighlightSlider.value = p.tc.highlight; tcHighlightVal.textContent = p.tc.highlight + '%';
+  tcWhiteSlider.value = p.tc.white; tcWhiteVal.textContent = p.tc.white + '%';
+
+  paperGradeSlider.value = p.paperGrade;
+  const pg = p.paperGrade;
+  paperGradeVal.textContent = pg===50 ? '中間（2号相当）' : (pg<50 ? `軟調-${50-pg}` : `硬調+${pg-50}`);
+
+  grainSlider.value = p.grain; grainVal.textContent = p.grain + '%';
+  detailSlider.value = p.detail; detailVal.textContent = p.detail + '%';
+
+  currentTone = p.tone;
+  toneBtns.forEach(b => b.classList.toggle('active', b.dataset.tone === p.tone));
+  toneStrengthSlider.value = p.toneStrength;
+  toneStrengthVal.textContent = p.toneStrength + '%';
+
+  dodgeBurnSlider.value = p.dodgeBurn; dodgeBurnVal.textContent = p.dodgeBurn + '%';
+
+  requestApply();
+}
+
+patchBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    patchBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    applyPatch(btn.dataset.patch);
+  });
+});
 
 // ── 決定論的な擬似ランダム（GRAINに使用）
 function pseudoRandom2D(x, y) {
