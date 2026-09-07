@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Silver Gelatin — k-eis</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  /* 暗室を思わせる、深いチャコールと銀のアクセント */
+  --bg: #161513;
+  --ink: #e9e6de;
+  --line: #2e2c27;
+  --line-strong: #47443c;
+  --accent: #c9c6bb;
+  --accent2: #9a978c;
+  --muted: #837f73;
+  --canvas-check-a: #1c1b18;
+  --canvas-check-b: #161513;
+  --mono: 'Courier New', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+}
+
+html, body { background: var(--bg); color: var(--ink); font-family: var(--sans); min-height: 100vh; }
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 40px 32px 80px; }
+
+header { border-bottom: 1px solid var(--line-strong); padding-bottom: 22px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-end; }
+.filter-tag { font: 600 10px/1 var(--mono); color: var(--accent); letter-spacing: 0.16em; margin-bottom: 10px; }
+h1 { font: 300 32px/1.1 var(--sans); letter-spacing: -0.01em; }
+h1 .jp { font-size: 15px; color: var(--muted); font-weight: 400; margin-left: 10px; }
+.tagline { font: 400 12px/1.6 var(--sans); color: var(--muted); margin-top: 6px; }
+.private-badge { font: 700 9px/1 var(--mono); color: var(--accent); letter-spacing: 0.08em; margin-top: 8px; border: 1px dashed var(--accent); display: inline-block; padding: 3px 7px; }
+.version { font: 400 9px/1 var(--mono); color: var(--muted); letter-spacing: 0.1em; text-align: right; }
+
+.stage { display: grid; grid-template-columns: 1fr 300px; gap: 0; border: 1px solid var(--line-strong); }
+
+.canvas-area {
+  position: sticky;
+  top: 20px;
+  align-self: start;
+  background:
+    linear-gradient(45deg, var(--canvas-check-a) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--canvas-check-a) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--canvas-check-a) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--canvas-check-a) 75%);
+  background-color: var(--canvas-check-b);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+  border-right: 1px solid var(--line-strong);
+  min-height: 480px;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+
+#dropZone { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; cursor: pointer; transition: background 0.15s; }
+#dropZone.drag-over { background: rgba(201,198,187,0.06); }
+#dropZone .icon { width: 40px; height: 40px; border: 1.5px solid var(--line-strong); border-radius: 50%; position: relative; }
+#dropZone .icon::before { content:''; position:absolute; left:50%; top:50%; width:14px; height:14px; border-radius:50%; background: var(--line-strong); transform: translate(-50%,-50%); opacity:0.5; }
+#dropZone .label-main { font: 500 12px/1 var(--sans); color: var(--ink); text-align: center; }
+#dropZone .label-sub { font: 400 9px/1 var(--mono); color: var(--muted); letter-spacing: 0.08em; }
+#fileInput { display: none; }
+
+canvas#outputCanvas { max-width: 100%; max-height: 640px; display: none; position: relative; }
+.canvas-badge { position: absolute; top: 14px; left: 14px; font: 500 9px/1 var(--mono); color: #f0ede0; background: rgba(0,0,0,0.45); padding: 4px 8px; border: 1px solid rgba(255,255,255,0.15); letter-spacing: 0.08em; display: none; }
+
+.controls { background: var(--bg); padding: 22px 20px; display: flex; flex-direction: column; gap: 0; }
+.ctrl-group { padding: 16px 0; border-bottom: 1px solid var(--line); }
+.ctrl-group:first-child { padding-top: 0; }
+.ctrl-label { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.ctrl-label .name { font: 500 10px/1 var(--sans); color: var(--ink); letter-spacing: 0.02em; }
+.ctrl-label .name .jp-small { font-size: 9px; color: var(--muted); margin-left: 4px; }
+.ctrl-label .val { font: 500 10px/1 var(--mono); color: var(--accent); }
+
+input[type="range"] { -webkit-appearance: none; width: 100%; height: 3px; background: var(--line-strong); outline: none; cursor: pointer; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); cursor: pointer; transition: transform 0.1s; }
+input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: none; cursor: pointer; }
+
+/* 選択式ボタン（FILTER / TONE） */
+.select-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+.select-btn { border: 1px solid var(--line-strong); padding: 8px 6px; cursor: pointer; text-align: center; font: 600 10px/1.3 var(--sans); color: var(--ink); transition: all 0.12s; }
+.select-btn:hover { border-color: var(--accent); }
+.select-btn.active { background: var(--accent); border-color: var(--accent); color: #14140f; }
+
+.action-buttons { display: flex; gap: 8px; }
+.btn { flex: 1; padding: 12px; border: 1px solid var(--accent); background: var(--accent); color: #14140f; font: 600 11px/1 var(--sans); letter-spacing: 0.04em; cursor: pointer; }
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.btn.secondary { background: transparent; color: var(--ink); border-color: var(--line-strong); }
+
+@media (max-width: 860px) {
+  .wrap { padding: 20px 16px 50px; }
+  header { flex-direction: column; align-items: flex-start; gap: 10px; padding-bottom: 16px; margin-bottom: 20px; }
+  h1 { font-size: 24px; }
+  h1 .jp { display: block; margin-left: 0; margin-top: 4px; }
+  .stage { grid-template-columns: 1fr; border: none; }
+  .canvas-area { border: 1px solid var(--line-strong); border-bottom: none; min-height: 220px; top: 0; z-index: 20; }
+  canvas#outputCanvas { max-height: 42vh; }
+  .controls { border: 1px solid var(--line-strong); border-top: none; padding: 18px 16px; }
+  input[type="range"] { height: 4px; margin: 8px 0; }
+  input[type="range"]::-webkit-slider-thumb { width: 22px; height: 22px; }
+  input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; }
+  .btn { padding: 16px; font-size: 12px; }
+  .select-btn { padding: 12px 6px; font-size: 11px; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="filter-tag">k-eis DESIGN FILTER 00-β</div>
+      <h1>Silver Gelatin <span class="jp">銀塩の階調</span></h1>
+      <div class="tagline">A darkroom for photographs that were never film.</div>
+      <div class="tagline" style="margin-top:2px; opacity:0.85;">フィルムではなかった写真のための、暗室。</div>
+      <div class="private-badge">PERSONAL / UNLISTED</div>
+    </div>
+    <div class="version">© 2026 k-eis studio</div>
+  </header>
+
+  <div class="stage">
+    <div class="canvas-area">
+      <div id="dropZone">
+        <div class="icon"></div>
+        <div class="label-main">Drop image, or click to select<br><span style="font-size:10px; opacity:0.6;">画像をドロップ、またはクリックして選択</span></div>
+        <div class="label-sub">PNG / JPEG SUPPORTED</div>
+        <input type="file" id="fileInput" accept="image/*">
+      </div>
+      <div class="canvas-badge" id="canvasBadge">PREVIEW</div>
+      <canvas id="outputCanvas"></canvas>
+    </div>
+
+    <div class="controls">
+      <div class="ctrl-group">
+        <div class="ctrl-label"><span class="name">FILTER <span class="jp-small">色被り除去フィルター</span></span></div>
+        <div class="select-grid" id="filterGrid">
+          <div class="select-btn active" data-filter="none">None</div>
+          <div class="select-btn" data-filter="yellow">Yellow</div>
+          <div class="select-btn" data-filter="orange">Orange</div>
+          <div class="select-btn" data-filter="red">Red</div>
+          <div class="select-btn" data-filter="green">Green</div>
+        </div>
+        <div class="ctrl-label">
+          <span class="name">FILTER STRENGTH</span>
+          <span class="val" id="filterStrengthVal">70%</span>
+        </div>
+        <input type="range" id="filterStrength" min="0" max="100" value="70">
+      </div>
+
+      <div class="ctrl-group">
+        <div class="ctrl-label">
+          <span class="name">PAPER GRADE <span class="jp-small">印画紙のコントラスト</span></span>
+          <span class="val" id="paperGradeVal">中間（2号相当）</span>
+        </div>
+        <input type="range" id="paperGrade" min="0" max="100" value="50">
+      </div>
+
+      <div class="ctrl-group">
+        <div class="ctrl-label">
+          <span class="name">GRAIN <span class="jp-small">フィルム粒子</span></span>
+          <span class="val" id="grainVal">20%</span>
+        </div>
+        <input type="range" id="grain" min="0" max="100" value="20">
+      </div>
+
+      <div class="ctrl-group">
+        <div class="ctrl-label">
+          <span class="name">DETAIL <span class="jp-small">解像感</span></span>
+          <span class="val" id="detailVal">25%</span>
+        </div>
+        <input type="range" id="detail" min="0" max="100" value="25">
+      </div>
+
+      <div class="ctrl-group">
+        <div class="ctrl-label"><span class="name">TONE <span class="jp-small">調色</span></span></div>
+        <div class="select-grid" id="toneGrid">
+          <div class="select-btn active" data-tone="none">None</div>
+          <div class="select-btn" data-tone="sepia">Sepia</div>
+          <div class="select-btn" data-tone="selenium">Selenium</div>
+          <div class="select-btn" data-tone="cyano">Cyanotype</div>
+        </div>
+        <div class="ctrl-label">
+          <span class="name">TONE STRENGTH</span>
+          <span class="val" id="toneStrengthVal">30%</span>
+        </div>
+        <input type="range" id="toneStrength" min="0" max="100" value="30">
+      </div>
+
+      <div class="ctrl-group" style="border-bottom:none;">
+        <div class="ctrl-label">
+          <span class="name">DODGE &amp; BURN <span class="jp-small">覆い焼き・焼き込み</span></span>
+          <span class="val" id="dodgeBurnVal">25%</span>
+        </div>
+        <input type="range" id="dodgeBurn" min="0" max="100" value="25">
+      </div>
+
+      <div class="ctrl-group" style="border-bottom:none;">
+        <div class="action-buttons">
+          <button class="btn" id="downloadBtn" disabled>SAVE AS PNG</button>
+          <button class="btn secondary" id="resetBtn" disabled>RESET IMAGE</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="silver-gelatin.js"></script>
+</body>
+</html>

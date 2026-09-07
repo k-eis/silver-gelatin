@@ -1,0 +1,383 @@
+// ── Silver Gelatin エフェクトエンジン（k-eis DESIGN FILTER 00-β・個人用/非公開）
+// 白黒写真だけが持つ、伝統的な暗室の語彙を扱う5系統のパラメータ:
+// 01 FILTER      → 撮影時の色フィルター（赤・黄・緑・オレンジ）。空の濃淡や肌の質感が変わる
+// 02 PAPER GRADE → 印画紙のコントラスト（軟調0号〜硬調5号相当）
+// 03 GRAIN       → フィルムの粒子
+// 04 DETAIL      → 解像感（アンシャープマスク）
+// 05 TONE        → 調色（セピア・セレニウム・シアノタイプ）
+// 06 DODGE&BURN  → 覆い焼き・焼き込み（中心を明るく、周辺を暗く）
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const outputCanvas = document.getElementById('outputCanvas');
+const canvasBadge = document.getElementById('canvasBadge');
+const ctx = outputCanvas.getContext('2d');
+
+const filterStrengthSlider = document.getElementById('filterStrength');
+const paperGradeSlider = document.getElementById('paperGrade');
+const grainSlider = document.getElementById('grain');
+const detailSlider = document.getElementById('detail');
+const toneStrengthSlider = document.getElementById('toneStrength');
+const dodgeBurnSlider = document.getElementById('dodgeBurn');
+
+const filterStrengthVal = document.getElementById('filterStrengthVal');
+const paperGradeVal = document.getElementById('paperGradeVal');
+const grainVal = document.getElementById('grainVal');
+const detailVal = document.getElementById('detailVal');
+const toneStrengthVal = document.getElementById('toneStrengthVal');
+const dodgeBurnVal = document.getElementById('dodgeBurnVal');
+
+const filterBtns = document.querySelectorAll('#filterGrid .select-btn');
+const toneBtns = document.querySelectorAll('#toneGrid .select-btn');
+
+const downloadBtn = document.getElementById('downloadBtn');
+const resetBtn = document.getElementById('resetBtn');
+
+let currentFilter = 'none';
+let currentTone = 'none';
+let originalImage = null;
+let originalImageData = null;
+let previewImageData = null;
+let isDragging = false;
+
+// ── フィルターの重み（伝統的な白黒撮影フィルター。赤/黄/緑/オレンジ）
+const FILTER_WEIGHTS = {
+  none:   [0.299, 0.587, 0.114],
+  yellow: [0.35, 0.55, 0.10],
+  orange: [0.50, 0.40, 0.10],
+  red:    [0.70, 0.20, 0.10],
+  green:  [0.20, 0.70, 0.10],
+};
+
+// ── 調色の色味（セピア・セレニウム・シアノタイプ）
+const TONE_COLORS = {
+  none:     null,
+  sepia:    [112, 66, 20],   // 暖かい琥珀色
+  selenium: [60, 30, 70],    // 冷たい紫がかった色
+  cyano:    [10, 50, 110],   // 青写真のような青
+};
+
+// ── ファイル読み込み
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) loadFile(file);
+});
+fileInput.addEventListener('change', (e) => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      originalImage = img;
+      setupCanvas(img);
+      applySilverGelatin();
+      dropZone.style.display = 'none';
+      canvasBadge.style.display = 'block';
+      outputCanvas.style.display = 'block';
+      downloadBtn.disabled = false;
+      resetBtn.disabled = false;
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function setupCanvas(img) {
+  const MAX_W = 900;
+  let w = img.width, h = img.height;
+  if (w > MAX_W) { h = h * (MAX_W / w); w = MAX_W; }
+  outputCanvas.width = w;
+  outputCanvas.height = h;
+  ctx.drawImage(img, 0, 0, w, h);
+  originalImageData = ctx.getImageData(0, 0, w, h);
+
+  const PREVIEW_MAX_W = 320;
+  const pScale = Math.min(1, PREVIEW_MAX_W / w);
+  const pw = Math.max(1, Math.round(w * pScale));
+  const ph = Math.max(1, Math.round(h * pScale));
+  const pCanvas = document.createElement('canvas');
+  pCanvas.width = pw; pCanvas.height = ph;
+  const pCtx = pCanvas.getContext('2d');
+  pCtx.drawImage(img, 0, 0, pw, ph);
+  previewImageData = pCtx.getImageData(0, 0, pw, ph);
+}
+
+let driftRAF = null;
+function requestApply() {
+  if (driftRAF) cancelAnimationFrame(driftRAF);
+  driftRAF = requestAnimationFrame(() => {
+    driftRAF = null;
+    if (isDragging) {
+      applySilverGelatin(true);
+    } else {
+      canvasBadge.textContent = '処理中… PROCESSING';
+      canvasBadge.style.display = 'block';
+      setTimeout(() => {
+        applySilverGelatin(false);
+        canvasBadge.textContent = 'PREVIEW';
+      }, 10);
+    }
+  });
+}
+
+// ── 決定論的な擬似ランダム（GRAINに使用）
+function pseudoRandom2D(x, y) {
+  const v = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+// ── スライディングウィンドウのボックスブラー（半径によらず高速）
+function boxBlur(data, w, h, radius) {
+  if (radius < 1) return data.slice();
+  const r = Math.max(1, Math.round(radius));
+  const temp = new Float32Array(data.length);
+  const out = new Uint8ClampedArray(data.length);
+  for (let y = 0; y < h; y++) {
+    const row = y * w * 4;
+    let sr=0, sg=0, sb=0, sa=0;
+    for (let k = -r; k <= r; k++) {
+      const sx = k < 0 ? 0 : (k >= w ? w - 1 : k);
+      const i = row + sx*4;
+      sr += data[i]; sg += data[i+1]; sb += data[i+2]; sa += data[i+3];
+    }
+    const count = 2*r + 1;
+    temp[row] = sr/count; temp[row+1] = sg/count; temp[row+2] = sb/count; temp[row+3] = sa/count;
+    for (let x = 1; x < w; x++) {
+      const addX = (x+r) >= w ? w-1 : x+r;
+      const remX = (x-1-r) < 0 ? 0 : x-1-r;
+      const ai = row + addX*4, ri = row + remX*4;
+      sr += data[ai] - data[ri]; sg += data[ai+1] - data[ri+1]; sb += data[ai+2] - data[ri+2]; sa += data[ai+3] - data[ri+3];
+      const oi = row + x*4;
+      temp[oi] = sr/count; temp[oi+1] = sg/count; temp[oi+2] = sb/count; temp[oi+3] = sa/count;
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    let sr=0, sg=0, sb=0, sa=0;
+    for (let k = -r; k <= r; k++) {
+      const sy = k < 0 ? 0 : (k >= h ? h - 1 : k);
+      const i = (sy*w+x)*4;
+      sr += temp[i]; sg += temp[i+1]; sb += temp[i+2]; sa += temp[i+3];
+    }
+    const count = 2*r + 1;
+    let oi = x*4;
+    out[oi] = sr/count; out[oi+1] = sg/count; out[oi+2] = sb/count; out[oi+3] = sa/count;
+    for (let y = 1; y < h; y++) {
+      const addY = (y+r) >= h ? h-1 : y+r;
+      const remY = (y-1-r) < 0 ? 0 : y-1-r;
+      const ai = (addY*w+x)*4, ri = (remY*w+x)*4;
+      sr += temp[ai] - temp[ri]; sg += temp[ai+1] - temp[ri+1]; sb += temp[ai+2] - temp[ri+2]; sa += temp[ai+3] - temp[ri+3];
+      oi = (y*w+x)*4;
+      out[oi] = sr/count; out[oi+1] = sg/count; out[oi+2] = sb/count; out[oi+3] = sa/count;
+    }
+  }
+  return out;
+}
+
+function applySilverGelatin(preview) {
+  if (!originalImageData) return;
+
+  const useData = (preview && previewImageData) ? previewImageData : originalImageData;
+  const w = useData.width, h = useData.height;
+  const radiusScale = preview ? (w / outputCanvas.width) : 1;
+
+  const filterStrength = parseInt(filterStrengthSlider.value) / 100;
+  const paperGrade = (parseInt(paperGradeSlider.value) - 50) / 50; // -1(軟調)〜0〜+1(硬調)
+  const grain = parseInt(grainSlider.value) / 100;
+  const detail = parseInt(detailSlider.value) / 100;
+  const toneStrength = parseInt(toneStrengthSlider.value) / 100;
+  const dodgeBurn = parseInt(dodgeBurnSlider.value) / 100;
+
+  const src = useData.data;
+  let out = new Uint8ClampedArray(src.length);
+
+  // ── STEP 1: FILTER（色被り除去フィルターに基づく輝度変換）+ PAPER GRADE（コントラストカーブ）
+  const neutralW = FILTER_WEIGHTS.none;
+  const filterW = FILTER_WEIGHTS[currentFilter] || neutralW;
+  const wr = neutralW[0] + (filterW[0]-neutralW[0])*filterStrength;
+  const wg = neutralW[1] + (filterW[1]-neutralW[1])*filterStrength;
+  const wb = neutralW[2] + (filterW[2]-neutralW[2])*filterStrength;
+  const gradeFactor = 1 + paperGrade * 1.6;
+
+  for (let i = 0; i < src.length; i += 4) {
+    let gray = src[i]*wr + src[i+1]*wg + src[i+2]*wb;
+    gray = 128 + (gray - 128) * gradeFactor;
+    gray = Math.max(0, Math.min(255, gray));
+    out[i] = out[i+1] = out[i+2] = gray; out[i+3] = src[i+3];
+  }
+
+  // ── STEP 2: DETAIL（アンシャープマスク）
+  if (detail > 0.01) {
+    const blurred = boxBlur(out, w, h, 1.4 * Math.max(radiusScale, 0.35));
+    const next = new Uint8ClampedArray(out.length);
+    const amount = detail * 1.2;
+    for (let i = 0; i < out.length; i += 4) {
+      const v = out[i] + (out[i] - blurred[i]) * amount;
+      next[i] = next[i+1] = next[i+2] = v; next[i+3] = out[i+3];
+    }
+    out = next;
+  }
+
+  // ── STEP 3: GRAIN（フィルム粒子）
+  if (grain > 0.01) {
+    const seedOff = 6000;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = (y*w+x)*4;
+        const n = (pseudoRandom2D(x+seedOff, y+seedOff) - 0.5) * 2;
+        const noise = n * grain * 28;
+        const v = out[i] + noise;
+        out[i] = out[i+1] = out[i+2] = v;
+      }
+    }
+  }
+
+  // ── STEP 4: DODGE & BURN（中心を明るく覆い焼き、周辺を暗く焼き込む）
+  if (dodgeBurn > 0.01) {
+    const cx = w/2, cy = h/2, maxDist = Math.sqrt(cx*cx+cy*cy);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const d = Math.sqrt((x-cx)*(x-cx)+(y-cy)*(y-cy)) / maxDist;
+        const i = (y*w+x)*4;
+        let v = out[i];
+        if (d < 0.35) {
+          v = v + (0.35 - d) * dodgeBurn * 60; // 中心：覆い焼きで明るく
+        } else {
+          v = v - Math.max(0, d - 0.5) * dodgeBurn * 90; // 周辺：焼き込みで暗く
+        }
+        v = Math.max(0, Math.min(255, v));
+        out[i] = out[i+1] = out[i+2] = v;
+      }
+    }
+  }
+
+  // ── STEP 5: TONE（調色。セピア・セレニウム・シアノタイプ）
+  const toneColor = TONE_COLORS[currentTone];
+  if (toneColor && toneStrength > 0.01) {
+    for (let i = 0; i < out.length; i += 4) {
+      const gray = out[i] / 255;
+      const tr = toneColor[0] * gray;
+      const tg = toneColor[1] * gray;
+      const tb = toneColor[2] * gray;
+      out[i]   = out[i]   * (1-toneStrength) + tr * toneStrength;
+      out[i+1] = out[i+1] * (1-toneStrength) + tg * toneStrength;
+      out[i+2] = out[i+2] * (1-toneStrength) + tb * toneStrength;
+    }
+  }
+
+  const resultData = new ImageData(out, w, h);
+
+  if (preview && previewImageData) {
+    let tempCanvas = applySilverGelatin._tempCanvas;
+    if (!tempCanvas) { tempCanvas = document.createElement('canvas'); applySilverGelatin._tempCanvas = tempCanvas; }
+    tempCanvas.width = w; tempCanvas.height = h;
+    tempCanvas.getContext('2d').putImageData(resultData, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(tempCanvas, 0, 0, w, h, 0, 0, outputCanvas.width, outputCanvas.height);
+  } else {
+    ctx.putImageData(resultData, 0, 0);
+  }
+}
+
+// ── UIイベント
+const allSliders = [filterStrengthSlider, paperGradeSlider, grainSlider, detailSlider, toneStrengthSlider, dodgeBurnSlider];
+allSliders.forEach(slider => {
+  slider.addEventListener('pointerdown', () => { isDragging = true; });
+  slider.addEventListener('touchstart', () => { isDragging = true; }, { passive: true });
+});
+function endDrag() {
+  if (!isDragging) return;
+  isDragging = false;
+  requestApply();
+}
+allSliders.forEach(slider => {
+  slider.addEventListener('pointerup', endDrag);
+  slider.addEventListener('touchend', endDrag);
+  slider.addEventListener('change', endDrag);
+});
+window.addEventListener('pointerup', () => { if (isDragging) endDrag(); });
+window.addEventListener('touchend', () => { if (isDragging) endDrag(); });
+
+filterStrengthSlider.addEventListener('input', () => { filterStrengthVal.textContent = filterStrengthSlider.value + '%'; requestApply(); });
+paperGradeSlider.addEventListener('input', () => {
+  const v = parseInt(paperGradeSlider.value);
+  paperGradeVal.textContent = v===50 ? '中間（2号相当）' : (v<50 ? `軟調-${50-v}` : `硬調+${v-50}`);
+  requestApply();
+});
+grainSlider.addEventListener('input', () => { grainVal.textContent = grainSlider.value + '%'; requestApply(); });
+detailSlider.addEventListener('input', () => { detailVal.textContent = detailSlider.value + '%'; requestApply(); });
+toneStrengthSlider.addEventListener('input', () => { toneStrengthVal.textContent = toneStrengthSlider.value + '%'; requestApply(); });
+dodgeBurnSlider.addEventListener('input', () => { dodgeBurnVal.textContent = dodgeBurnSlider.value + '%'; requestApply(); });
+
+filterBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentFilter = btn.dataset.filter;
+    filterBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    requestApply();
+  });
+});
+toneBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentTone = btn.dataset.tone;
+    toneBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    requestApply();
+  });
+});
+
+// ── 保存（iOS対応：オーバーレイ方式）
+downloadBtn.addEventListener('click', () => {
+  try {
+    const dataUrl = outputCanvas.toDataURL('image/png');
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (isIOS) {
+      showSaveOverlay(dataUrl);
+    } else {
+      const link = document.createElement('a');
+      link.download = 'silver-gelatin.png';
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  } catch (err) {
+    console.error('PNG保存に失敗しました:', err);
+    alert('画像の保存に失敗しました。ブラウザを再読み込みしてもう一度お試しください。');
+  }
+});
+
+function showSaveOverlay(dataUrl) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `position: fixed; inset: 0; z-index: 9999; background: rgba(10,10,10,0.96);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box;`;
+  const img = document.createElement('img');
+  img.src = dataUrl;
+  img.style.cssText = 'max-width: 100%; max-height: 75vh; border-radius: 2px;';
+  const hint = document.createElement('p');
+  hint.innerHTML = '画像を長押しして「写真に保存」を選んでください<br><span style="color:#888; font-size:11px;">Press and hold the image, then tap "Save to Photos"</span>';
+  hint.style.cssText = 'color: #ccc; font-family: sans-serif; font-size: 13px; margin-top: 16px; text-align: center; line-height: 1.6;';
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '閉じる / Close';
+  closeBtn.style.cssText = `margin-top: 20px; padding: 10px 24px; background: transparent; color: white; border: 1px solid #666; border-radius: 2px; font-family: sans-serif; font-size: 13px; cursor: pointer;`;
+  closeBtn.addEventListener('click', () => overlay.remove());
+  overlay.appendChild(img); overlay.appendChild(hint); overlay.appendChild(closeBtn);
+  document.body.appendChild(overlay);
+}
+
+resetBtn.addEventListener('click', () => {
+  originalImage = null;
+  originalImageData = null;
+  outputCanvas.style.display = 'none';
+  canvasBadge.style.display = 'none';
+  dropZone.style.display = 'flex';
+  downloadBtn.disabled = true;
+  resetBtn.disabled = true;
+  fileInput.value = '';
+});
