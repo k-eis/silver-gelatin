@@ -150,6 +150,35 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
       </div>
 
       <div class="ctrl-group">
+        <div class="ctrl-label"><span class="name">TONAL CURVE <span class="jp-small">階調構造</span></span></div>
+        <div class="ctrl-label" style="margin-bottom:4px;">
+          <span class="name" style="font-size:9px; color:var(--muted);">BLACK</span>
+          <span class="val" id="tcBlackVal">50%</span>
+        </div>
+        <input type="range" id="tcBlack" min="0" max="100" value="50">
+        <div class="ctrl-label" style="margin-bottom:4px; margin-top:10px;">
+          <span class="name" style="font-size:9px; color:var(--muted);">SHADOW</span>
+          <span class="val" id="tcShadowVal">50%</span>
+        </div>
+        <input type="range" id="tcShadow" min="0" max="100" value="50">
+        <div class="ctrl-label" style="margin-bottom:4px; margin-top:10px;">
+          <span class="name" style="font-size:9px; color:var(--muted);">MIDTONE</span>
+          <span class="val" id="tcMidtoneVal">50%</span>
+        </div>
+        <input type="range" id="tcMidtone" min="0" max="100" value="50">
+        <div class="ctrl-label" style="margin-bottom:4px; margin-top:10px;">
+          <span class="name" style="font-size:9px; color:var(--muted);">HIGHLIGHT</span>
+          <span class="val" id="tcHighlightVal">50%</span>
+        </div>
+        <input type="range" id="tcHighlight" min="0" max="100" value="50">
+        <div class="ctrl-label" style="margin-bottom:4px; margin-top:10px;">
+          <span class="name" style="font-size:9px; color:var(--muted);">WHITE</span>
+          <span class="val" id="tcWhiteVal">50%</span>
+        </div>
+        <input type="range" id="tcWhite" min="0" max="100" value="50">
+      </div>
+
+      <div class="ctrl-group">
         <div class="ctrl-label">
           <span class="name">PAPER GRADE <span class="jp-small">印画紙のコントラスト</span></span>
           <span class="val" id="paperGradeVal">中間（2号相当）</span>

@@ -1,11 +1,12 @@
 // ── Silver Gelatin エフェクトエンジン（k-eis DESIGN FILTER 00-β・個人用/非公開）
-// 白黒写真だけが持つ、伝統的な暗室の語彙を扱う5系統のパラメータ:
-// 01 FILTER      → 撮影時の色フィルター（赤・黄・緑・オレンジ）。空の濃淡や肌の質感が変わる
-// 02 PAPER GRADE → 印画紙のコントラスト（軟調0号〜硬調5号相当）
-// 03 GRAIN       → フィルムの粒子
-// 04 DETAIL      → 解像感（アンシャープマスク）
-// 05 TONE        → 調色（セピア・セレニウム・シアノタイプ）
-// 06 DODGE&BURN  → 覆い焼き・焼き込み（中心を明るく、周辺を暗く）
+// 白黒写真だけが持つ、伝統的な暗室の語彙を扱う7系統のパラメータ:
+// 01 FILTER       → 撮影時の色フィルター（赤・黄・緑・オレンジ）。空の濃淡や肌の質感が変わる
+// 02 TONAL CURVE  → 階調構造（BLACK/SHADOW/MIDTONE/HIGHLIGHT/WHITEの5点カーブ）
+// 03 PAPER GRADE  → 印画紙のコントラスト（軟調0号〜硬調5号相当）
+// 04 GRAIN        → フィルムの粒子
+// 05 DETAIL       → 解像感（アンシャープマスク）
+// 06 TONE         → 調色（セピア・セレニウム・シアノタイプ）
+// 07 DODGE&BURN   → 覆い焼き・焼き込み（中心を明るく、周辺を暗く）
 
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
@@ -14,6 +15,11 @@ const canvasBadge = document.getElementById('canvasBadge');
 const ctx = outputCanvas.getContext('2d');
 
 const filterStrengthSlider = document.getElementById('filterStrength');
+const tcBlackSlider = document.getElementById('tcBlack');
+const tcShadowSlider = document.getElementById('tcShadow');
+const tcMidtoneSlider = document.getElementById('tcMidtone');
+const tcHighlightSlider = document.getElementById('tcHighlight');
+const tcWhiteSlider = document.getElementById('tcWhite');
 const paperGradeSlider = document.getElementById('paperGrade');
 const grainSlider = document.getElementById('grain');
 const detailSlider = document.getElementById('detail');
@@ -21,6 +27,11 @@ const toneStrengthSlider = document.getElementById('toneStrength');
 const dodgeBurnSlider = document.getElementById('dodgeBurn');
 
 const filterStrengthVal = document.getElementById('filterStrengthVal');
+const tcBlackVal = document.getElementById('tcBlackVal');
+const tcShadowVal = document.getElementById('tcShadowVal');
+const tcMidtoneVal = document.getElementById('tcMidtoneVal');
+const tcHighlightVal = document.getElementById('tcHighlightVal');
+const tcWhiteVal = document.getElementById('tcWhiteVal');
 const paperGradeVal = document.getElementById('paperGradeVal');
 const grainVal = document.getElementById('grainVal');
 const detailVal = document.getElementById('detailVal');
@@ -126,6 +137,41 @@ function requestApply() {
   });
 }
 
+// ── TONAL CURVE：BLACK/SHADOW/MIDTONE/HIGHLIGHT/WHITEの5点をCatmull-Romで滑らかに繋ぎ、
+//    輝度0〜255に対応する256エントリのルックアップテーブルを作る
+function catmullRom(p0, p1, p2, p3, t) {
+  const t2 = t * t, t3 = t2 * t;
+  return 0.5 * (
+    (2 * p1) +
+    (-p0 + p2) * t +
+    (2*p0 - 5*p1 + 4*p2 - p3) * t2 +
+    (-p0 + 3*p1 - 3*p2 + p3) * t3
+  );
+}
+
+function buildToneCurveLUT(black, shadow, midtone, highlight, white) {
+  const anchorsX = [0, 64, 128, 191, 255];
+  const amp = [50, 60, 70, 60, 50]; // 中間ほど大きく動く、両端は控えめ
+  const vals = [black, shadow, midtone, highlight, white];
+  const anchorsY = vals.map((v, i) => {
+    const y = anchorsX[i] + (v - 50) / 50 * amp[i];
+    return Math.max(0, Math.min(255, y));
+  });
+
+  const n = anchorsX.length;
+  const extY = [anchorsY[0], ...anchorsY, anchorsY[n - 1]];
+
+  const lut = new Uint8ClampedArray(256);
+  let seg = 0;
+  for (let x = 0; x <= 255; x++) {
+    while (seg < n - 2 && x > anchorsX[seg + 1]) seg++;
+    const x0 = anchorsX[seg], x1 = anchorsX[seg + 1];
+    const t = (x1 - x0) === 0 ? 0 : (x - x0) / (x1 - x0);
+    lut[x] = catmullRom(extY[seg], extY[seg + 1], extY[seg + 2], extY[seg + 3], t);
+  }
+  return lut;
+}
+
 // ── 決定論的な擬似ランダム（GRAINに使用）
 function pseudoRandom2D(x, y) {
   const v = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
@@ -193,6 +239,14 @@ function applySilverGelatin(preview) {
   const toneStrength = parseInt(toneStrengthSlider.value) / 100;
   const dodgeBurn = parseInt(dodgeBurnSlider.value) / 100;
 
+  const toneCurveLUT = buildToneCurveLUT(
+    parseInt(tcBlackSlider.value),
+    parseInt(tcShadowSlider.value),
+    parseInt(tcMidtoneSlider.value),
+    parseInt(tcHighlightSlider.value),
+    parseInt(tcWhiteSlider.value)
+  );
+
   const src = useData.data;
   let out = new Uint8ClampedArray(src.length);
 
@@ -206,6 +260,7 @@ function applySilverGelatin(preview) {
 
   for (let i = 0; i < src.length; i += 4) {
     let gray = src[i]*wr + src[i+1]*wg + src[i+2]*wb;
+    gray = toneCurveLUT[Math.max(0, Math.min(255, Math.round(gray)))];
     gray = 128 + (gray - 128) * gradeFactor;
     gray = Math.max(0, Math.min(255, gray));
     out[i] = out[i+1] = out[i+2] = gray; out[i+3] = src[i+3];
@@ -285,7 +340,7 @@ function applySilverGelatin(preview) {
 }
 
 // ── UIイベント
-const allSliders = [filterStrengthSlider, paperGradeSlider, grainSlider, detailSlider, toneStrengthSlider, dodgeBurnSlider];
+const allSliders = [filterStrengthSlider, tcBlackSlider, tcShadowSlider, tcMidtoneSlider, tcHighlightSlider, tcWhiteSlider, paperGradeSlider, grainSlider, detailSlider, toneStrengthSlider, dodgeBurnSlider];
 allSliders.forEach(slider => {
   slider.addEventListener('pointerdown', () => { isDragging = true; });
   slider.addEventListener('touchstart', () => { isDragging = true; }, { passive: true });
@@ -304,6 +359,11 @@ window.addEventListener('pointerup', () => { if (isDragging) endDrag(); });
 window.addEventListener('touchend', () => { if (isDragging) endDrag(); });
 
 filterStrengthSlider.addEventListener('input', () => { filterStrengthVal.textContent = filterStrengthSlider.value + '%'; requestApply(); });
+tcBlackSlider.addEventListener('input', () => { tcBlackVal.textContent = tcBlackSlider.value + '%'; requestApply(); });
+tcShadowSlider.addEventListener('input', () => { tcShadowVal.textContent = tcShadowSlider.value + '%'; requestApply(); });
+tcMidtoneSlider.addEventListener('input', () => { tcMidtoneVal.textContent = tcMidtoneSlider.value + '%'; requestApply(); });
+tcHighlightSlider.addEventListener('input', () => { tcHighlightVal.textContent = tcHighlightSlider.value + '%'; requestApply(); });
+tcWhiteSlider.addEventListener('input', () => { tcWhiteVal.textContent = tcWhiteSlider.value + '%'; requestApply(); });
 paperGradeSlider.addEventListener('input', () => {
   const v = parseInt(paperGradeSlider.value);
   paperGradeVal.textContent = v===50 ? '中間（2号相当）' : (v<50 ? `軟調-${50-v}` : `硬調+${v-50}`);
