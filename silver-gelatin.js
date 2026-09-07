@@ -195,19 +195,22 @@ const CAMERA_PATCHES = {
   },
   // Kodak Tri-X 400：豊かな黒、コントラストの強い中間調、ハイライトのディテールは残る、
   // 独特の有機的な粒状感が持ち味の報道写真フィルム
+  // （TONAL CURVEとPAPER GRADEの両方でコントラストを足すと二重掛けで強すぎたため、
+  //   PAPER GRADEはニュートラルに戻しTONAL CURVE側のS字だけでコントラストを表現）
   triX400: {
     filter: 'yellow', filterStrength: 40,
-    tc: { black: 48, shadow: 38, midtone: 54, highlight: 62, white: 54 },
-    paperGrade: 62, grain: 55, detail: 38,
-    tone: 'none', toneStrength: 0, dodgeBurn: 30
+    tc: { black: 48, shadow: 42, midtone: 54, highlight: 58, white: 54 },
+    paperGrade: 50, grain: 55, detail: 38,
+    tone: 'none', toneStrength: 0, dodgeBurn: 25
   },
   // Ricoh GR：シャドウを潰しハイライトで魅せる"ハイコントラスト白黒"設定が定番。
   // シャープネス・クラリティ・周辺減光を強めに焼き込むスナップシューター的な硬さ
+  // （同上の理由でPAPER GRADEとDODGE&BURNの掛けすぎを抑え、TONAL CURVEのシャドウ潰しを主役に調整）
   ricohGR: {
-    filter: 'red', filterStrength: 25,
-    tc: { black: 50, shadow: 25, midtone: 45, highlight: 55, white: 52 },
-    paperGrade: 72, grain: 35, detail: 60,
-    tone: 'none', toneStrength: 0, dodgeBurn: 55
+    filter: 'red', filterStrength: 20,
+    tc: { black: 50, shadow: 35, midtone: 47, highlight: 52, white: 50 },
+    paperGrade: 55, grain: 35, detail: 55,
+    tone: 'none', toneStrength: 0, dodgeBurn: 42
   }
 };
 
