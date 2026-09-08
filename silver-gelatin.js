@@ -239,7 +239,7 @@ const CAMERAS = {
   holga: {
     filter: 'none', filterStrength: 0,
     tc: { highlight: 54, white: 52 },
-    detail: 3, paperGrade: 58, dodgeBurn: 80, lightLeak: 20
+    detail: 3, paperGrade: 58, dodgeBurn: 80, lightLeak: 12
   }
 };
 
@@ -635,15 +635,15 @@ function applySilverGelatin(preview) {
   const lightLeak = parseInt(lightLeakSlider.value) / 100;
   if (lightLeak > 0.01) {
     const lx = w * 0.85, ly = h * 0.12;
-    const maxDist = Math.sqrt(w*w + h*h) * 0.55;
-    const leakColor = [255, 175, 90];
+    const maxDist = Math.sqrt(w*w + h*h) * 0.32;
+    const leakColor = [255, 195, 130];
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const dx = x - lx, dy = y - ly;
         const dist = Math.sqrt(dx*dx + dy*dy) / maxDist;
         const wgt = Math.max(0, 1 - dist);
         if (wgt <= 0) continue;
-        const amt = wgt * wgt * lightLeak;
+        const amt = wgt * wgt * wgt * lightLeak;
         const i = (y*w+x)*4;
         out[i]   = out[i]   * (1-amt) + leakColor[0] * amt;
         out[i+1] = out[i+1] * (1-amt) + leakColor[1] * amt;
