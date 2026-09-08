@@ -209,6 +209,15 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
       </div>
 
       <div class="ctrl-group">
+        <div class="ctrl-label"><span class="name">PAPER TYPE <span class="jp-small">印画紙の個性</span></span></div>
+        <div class="select-grid" id="paperTypeGrid" style="grid-template-columns: 1fr 1fr 1fr;">
+          <div class="select-btn active" data-paper-type="standard">標準</div>
+          <div class="select-btn" data-paper-type="fiberBase">Fiber Base</div>
+          <div class="select-btn" data-paper-type="lith">Lith Print</div>
+        </div>
+      </div>
+
+      <div class="ctrl-group">
         <div class="ctrl-label">
           <span class="name">GRAIN <span class="jp-small">フィルム粒子</span></span>
           <span class="val" id="grainVal">20%</span>

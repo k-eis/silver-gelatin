@@ -48,6 +48,7 @@ const filterBtns = document.querySelectorAll('#filterGrid .select-btn');
 const toneBtns = document.querySelectorAll('#toneGrid .select-btn');
 const cameraBtns = document.querySelectorAll('#cameraGrid .select-btn');
 const filmBtns = document.querySelectorAll('#filmGrid .select-btn');
+const paperTypeBtns = document.querySelectorAll('#paperTypeGrid .select-btn');
 
 const downloadBtn = document.getElementById('downloadBtn');
 const resetBtn = document.getElementById('resetBtn');
@@ -288,6 +289,40 @@ function applyFilm(key) {
   requestApply();
 }
 
+// ── PAPER TYPE：印画紙そのものの個性。TONAL CURVEはCAMERA/FILM STOCKが担当済みなので触らず、
+// PAPER GRADE（コントラスト）・GRAIN・TONEだけを、指定されたフィールドがある時だけ上書きする
+// （＝暗室の最終工程として、カメラ/フィルムの設定の上から"仕上げ"を乗せるイメージ）
+const PAPER_TYPES = {
+  standard: { paperGrade: 50 },
+  // Fiber Base：深い黒・豊かな階調分離が持ち味の高級印画紙
+  fiberBase: { paperGrade: 58 },
+  // Lith Print：infectious developmentという現象で、ハイライト〜中間調は柔らかく暖色、
+  // シャドウだけ冷たく粒子が荒くコントラストが強い、という明暗で質感が分裂する特殊技法。
+  // TONEは全体に均一にしかかけられないので「ハイライトだけ暖色」は簡略化して弱めのSepiaで近似
+  lith: { paperGrade: 88, grain: 70, grainSize: 2.2, tone: 'sepia', toneStrength: 30, dodgeBurn: 45 }
+};
+
+function applyPaperType(key) {
+  const p = PAPER_TYPES[key];
+  if (!p) return;
+
+  if (p.paperGrade !== undefined) {
+    paperGradeSlider.value = p.paperGrade;
+    const pg = p.paperGrade;
+    paperGradeVal.textContent = pg===50 ? '中間（2号相当）' : (pg<50 ? `軟調-${50-pg}` : `硬調+${pg-50}`);
+  }
+  if (p.grain !== undefined) { grainSlider.value = p.grain; grainVal.textContent = p.grain + '%'; }
+  if (p.grainSize !== undefined) { currentGrainSize = p.grainSize; }
+  if (p.tone !== undefined) {
+    currentTone = p.tone;
+    toneBtns.forEach(b => b.classList.toggle('active', b.dataset.tone === p.tone));
+  }
+  if (p.toneStrength !== undefined) { toneStrengthSlider.value = p.toneStrength; toneStrengthVal.textContent = p.toneStrength + '%'; }
+  if (p.dodgeBurn !== undefined) { dodgeBurnSlider.value = p.dodgeBurn; dodgeBurnVal.textContent = p.dodgeBurn + '%'; }
+
+  requestApply();
+}
+
 cameraBtns.forEach(btn => {
   btn.addEventListener('click', () => {
     cameraBtns.forEach(b => b.classList.remove('active'));
@@ -301,6 +336,14 @@ filmBtns.forEach(btn => {
     filmBtns.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     applyFilm(btn.dataset.film);
+  });
+});
+
+paperTypeBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    paperTypeBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    applyPaperType(btn.dataset.paperType);
   });
 });
 
