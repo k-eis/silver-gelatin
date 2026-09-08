@@ -8,8 +8,11 @@
 // 06 TONE         → 調色（セピア・セレニウム・シアノタイプ）
 // 07 DODGE&BURN   → 覆い焼き・焼き込み（中心を明るく、周辺を暗く）
 //
-// CAMERA PATCH → 上記パラメータの組み合わせプリセット（実機の白黒表現の個性を再現）
-//   Leica M Monochrom / Kodak Tri-X 400 / Ricoh GR
+// CAMERA と FILM STOCK は独立した軸で、掛け合わせて使える
+//   CAMERA     → FILTER/TONAL CURVE(HIGHLIGHT・WHITE)/DETAIL/PAPER GRADE/DODGE&BURNを担当
+//                Leica M Monochrom / Ricoh GR
+//   FILM STOCK → TONAL CURVE(BLACK・SHADOW・MIDTONE)/GRAIN(量・粒の大きさ)を担当
+//                Kodak Tri-X 400 / Ilford HP5 Plus / Ilford Delta 100
 
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
@@ -43,13 +46,15 @@ const dodgeBurnVal = document.getElementById('dodgeBurnVal');
 
 const filterBtns = document.querySelectorAll('#filterGrid .select-btn');
 const toneBtns = document.querySelectorAll('#toneGrid .select-btn');
-const patchBtns = document.querySelectorAll('#patchGrid .select-btn');
+const cameraBtns = document.querySelectorAll('#cameraGrid .select-btn');
+const filmBtns = document.querySelectorAll('#filmGrid .select-btn');
 
 const downloadBtn = document.getElementById('downloadBtn');
 const resetBtn = document.getElementById('resetBtn');
 
 let currentFilter = 'none';
 let currentTone = 'none';
+let currentGrainSize = 1; // FILM STOCKの粒の大きさ（1=最も細かい/デジタル的、大きいほど粗い有機的な粒に）
 let originalImage = null;
 let originalImageData = null;
 let previewImageData = null;
@@ -176,81 +181,105 @@ function buildToneCurveLUT(black, shadow, midtone, highlight, white) {
   return lut;
 }
 
-// ── CAMERA PATCH：実機の白黒表現の個性を、Silver Gelatinの7パラメータに翻訳したプリセット
-// 各値は思い込みではなく実機レビュー・作例の傾向を調べた上で設定している
-const CAMERA_PATCHES = {
-  init: {
+// ── CAMERA：センサー・JPEGエンジンの個性（FILTER/TONAL CURVEのHIGHLIGHT・WHITE/DETAIL/PAPER GRADE/DODGE&BURN）
+// ── FILM STOCK：フィルム乳剤の個性（TONAL CURVEのBLACK・SHADOW・MIDTONE/GRAINの量と粒の大きさ）
+// カメラとフィルムは別々のパラメータ群を担当するので、掛け合わせて使える
+const CAMERAS = {
+  none: {
     filter: 'none', filterStrength: 70,
-    tc: { black: 50, shadow: 50, midtone: 50, highlight: 50, white: 50 },
-    paperGrade: 50, grain: 20, detail: 25,
-    tone: 'none', toneStrength: 30, dodgeBurn: 25
+    tc: { highlight: 50, white: 50 },
+    detail: 25, paperGrade: 50, dodgeBurn: 25
   },
-  // Leica M Monochrom：カラーフィルターアレイのない専用センサー。階調は豊かでなだらか、
-  // 黒は浅め・ハイライトは白飛びしやすいため直後は"おとなしい"（後処理で生きる）のが実機の特徴
+  // Leica M Monochrom：カラーフィルターアレイのない専用センサー。撮って出しは黒が浅め・
+  // ハイライトが飛びやすく"おとなしい"（後処理で生きる）のが実機レビューでの評価
   leicaMMono: {
     filter: 'yellow', filterStrength: 20,
-    tc: { black: 60, shadow: 58, midtone: 54, highlight: 44, white: 45 },
-    paperGrade: 48, grain: 5, detail: 65,
-    tone: 'none', toneStrength: 0, dodgeBurn: 10
-  },
-  // Kodak Tri-X 400：豊かな黒、コントラストの強い中間調、ハイライトのディテールは残る、
-  // 独特の有機的な粒状感が持ち味の報道写真フィルム
-  // （TONAL CURVEとPAPER GRADEの両方でコントラストを足すと二重掛けで強すぎたため、
-  //   PAPER GRADEはニュートラルに戻しTONAL CURVE側のS字だけでコントラストを表現）
-  triX400: {
-    filter: 'yellow', filterStrength: 40,
-    tc: { black: 48, shadow: 42, midtone: 54, highlight: 58, white: 54 },
-    paperGrade: 50, grain: 55, detail: 38,
-    tone: 'none', toneStrength: 0, dodgeBurn: 25
+    tc: { highlight: 44, white: 45 },
+    detail: 65, paperGrade: 48, dodgeBurn: 10
   },
   // Ricoh GR：シャドウを潰しハイライトで魅せる"ハイコントラスト白黒"設定が定番。
-  // シャープネス・クラリティ・周辺減光を強めに焼き込むスナップシューター的な硬さ
-  // （同上の理由でPAPER GRADEとDODGE&BURNの掛けすぎを抑え、TONAL CURVEのシャドウ潰しを主役に調整）
+  // シャープネス・クラリティ・周辺減光（Shading）を強めに焼き込むスナップシューター的な硬さ
   ricohGR: {
     filter: 'red', filterStrength: 20,
-    tc: { black: 50, shadow: 35, midtone: 47, highlight: 52, white: 50 },
-    paperGrade: 55, grain: 35, detail: 55,
-    tone: 'none', toneStrength: 0, dodgeBurn: 42
+    tc: { highlight: 52, white: 50 },
+    detail: 55, paperGrade: 55, dodgeBurn: 42
   }
 };
 
-function applyPatch(patch) {
-  const p = CAMERA_PATCHES[patch];
-  if (!p) return;
+const FILM_STOCKS = {
+  none: {
+    tc: { black: 50, shadow: 50, midtone: 50 },
+    grain: 20, grainSize: 1
+  },
+  // Kodak Tri-X 400：豊かな黒、コントラストの強い中間調、独特の有機的な粒状感
+  triX400: {
+    tc: { black: 48, shadow: 42, midtone: 54 },
+    grain: 55, grainSize: 1.8
+  },
+  // Ilford HP5 Plus：Tri-Xより中間調で控えめ、黒の締まりも穏やかで、粒はやや細かいが
+  // Tri-Xほどキレのある解像感ではない、柔らかい印象の乳剤
+  hp5Plus: {
+    tc: { black: 53, shadow: 55, midtone: 50 },
+    grain: 35, grainSize: 1.4
+  },
+  // Ilford Delta 100：モダンなT粒子（Core-Shell）で極めて微粒子・高解像、
+  // 黒は締まりつつディテールを残す、クリーンな乳剤
+  delta100: {
+    tc: { black: 46, shadow: 48, midtone: 50 },
+    grain: 15, grainSize: 1
+  }
+};
 
-  currentFilter = p.filter;
-  filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === p.filter));
-  filterStrengthSlider.value = p.filterStrength;
-  filterStrengthVal.textContent = p.filterStrength + '%';
+function applyCamera(key) {
+  const c = CAMERAS[key];
+  if (!c) return;
 
-  tcBlackSlider.value = p.tc.black; tcBlackVal.textContent = p.tc.black + '%';
-  tcShadowSlider.value = p.tc.shadow; tcShadowVal.textContent = p.tc.shadow + '%';
-  tcMidtoneSlider.value = p.tc.midtone; tcMidtoneVal.textContent = p.tc.midtone + '%';
-  tcHighlightSlider.value = p.tc.highlight; tcHighlightVal.textContent = p.tc.highlight + '%';
-  tcWhiteSlider.value = p.tc.white; tcWhiteVal.textContent = p.tc.white + '%';
+  currentFilter = c.filter;
+  filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === c.filter));
+  filterStrengthSlider.value = c.filterStrength;
+  filterStrengthVal.textContent = c.filterStrength + '%';
 
-  paperGradeSlider.value = p.paperGrade;
-  const pg = p.paperGrade;
+  tcHighlightSlider.value = c.tc.highlight; tcHighlightVal.textContent = c.tc.highlight + '%';
+  tcWhiteSlider.value = c.tc.white; tcWhiteVal.textContent = c.tc.white + '%';
+
+  detailSlider.value = c.detail; detailVal.textContent = c.detail + '%';
+
+  paperGradeSlider.value = c.paperGrade;
+  const pg = c.paperGrade;
   paperGradeVal.textContent = pg===50 ? '中間（2号相当）' : (pg<50 ? `軟調-${50-pg}` : `硬調+${pg-50}`);
 
-  grainSlider.value = p.grain; grainVal.textContent = p.grain + '%';
-  detailSlider.value = p.detail; detailVal.textContent = p.detail + '%';
-
-  currentTone = p.tone;
-  toneBtns.forEach(b => b.classList.toggle('active', b.dataset.tone === p.tone));
-  toneStrengthSlider.value = p.toneStrength;
-  toneStrengthVal.textContent = p.toneStrength + '%';
-
-  dodgeBurnSlider.value = p.dodgeBurn; dodgeBurnVal.textContent = p.dodgeBurn + '%';
+  dodgeBurnSlider.value = c.dodgeBurn; dodgeBurnVal.textContent = c.dodgeBurn + '%';
 
   requestApply();
 }
 
-patchBtns.forEach(btn => {
+function applyFilm(key) {
+  const f = FILM_STOCKS[key];
+  if (!f) return;
+
+  tcBlackSlider.value = f.tc.black; tcBlackVal.textContent = f.tc.black + '%';
+  tcShadowSlider.value = f.tc.shadow; tcShadowVal.textContent = f.tc.shadow + '%';
+  tcMidtoneSlider.value = f.tc.midtone; tcMidtoneVal.textContent = f.tc.midtone + '%';
+
+  grainSlider.value = f.grain; grainVal.textContent = f.grain + '%';
+  currentGrainSize = f.grainSize;
+
+  requestApply();
+}
+
+cameraBtns.forEach(btn => {
   btn.addEventListener('click', () => {
-    patchBtns.forEach(b => b.classList.remove('active'));
+    cameraBtns.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    applyPatch(btn.dataset.patch);
+    applyCamera(btn.dataset.camera);
+  });
+});
+
+filmBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    filmBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    applyFilm(btn.dataset.film);
   });
 });
 
@@ -360,13 +389,15 @@ function applySilverGelatin(preview) {
     out = next;
   }
 
-  // ── STEP 3: GRAIN（フィルム粒子）
+  // ── STEP 3: GRAIN（フィルム粒子。FILM STOCKのgrainSizeで粒の粗さも変える）
   if (grain > 0.01) {
     const seedOff = 6000;
+    const gsize = Math.max(1, currentGrainSize);
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const i = (y*w+x)*4;
-        const n = (pseudoRandom2D(x+seedOff, y+seedOff) - 0.5) * 2;
+        const gx = Math.floor(x / gsize), gy = Math.floor(y / gsize);
+        const n = (pseudoRandom2D(gx+seedOff, gy+seedOff) - 0.5) * 2;
         const noise = n * grain * 28;
         const v = out[i] + noise;
         out[i] = out[i+1] = out[i+2] = v;
