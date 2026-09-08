@@ -234,11 +234,12 @@ const CAMERAS = {
   },
   // Holga：プラスチックのメニスカスレンズによる、画面全体が均一に甘いソフトフォーカス。
   // Dream Lensとは違い"中心も含めて総崩れ"、トンネル状の強い周辺減光が特徴。
-  // 実機レビューで最頻出のキーワードだったLIGHT LEAKも、Holgaだけの個性として持たせる
+  // LIGHT LEAKもHolgaだけの個性として持たせるが、実機では「たまに起きる」不意打ち的な現象で
+  // 毎回強く出るものではないため、控えめな強さ・やや黄味寄りの色に調整
   holga: {
     filter: 'none', filterStrength: 0,
     tc: { highlight: 54, white: 52 },
-    detail: 3, paperGrade: 58, dodgeBurn: 80, lightLeak: 45
+    detail: 3, paperGrade: 58, dodgeBurn: 80, lightLeak: 20
   }
 };
 
@@ -635,7 +636,7 @@ function applySilverGelatin(preview) {
   if (lightLeak > 0.01) {
     const lx = w * 0.85, ly = h * 0.12;
     const maxDist = Math.sqrt(w*w + h*h) * 0.55;
-    const leakColor = [255, 150, 60];
+    const leakColor = [255, 175, 90];
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const dx = x - lx, dy = y - ly;
