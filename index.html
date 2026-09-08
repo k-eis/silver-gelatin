@@ -111,11 +111,10 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 <div class="wrap">
   <header>
     <div>
-      <div class="filter-tag">k-eis DESIGN FILTER 00-β</div>
+      <div class="filter-tag">k-eis DESIGN FILTER 006</div>
       <h1>Silver Gelatin <span class="jp">銀塩の階調</span></h1>
       <div class="tagline">A darkroom for photographs that were never film.</div>
       <div class="tagline" style="margin-top:2px; opacity:0.85;">フィルムではなかった写真のための、暗室。</div>
-      <div class="private-badge">PERSONAL / UNLISTED</div>
     </div>
     <div class="version">© 2026 k-eis studio</div>
   </header>
@@ -248,12 +247,20 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
         <input type="range" id="toneStrength" min="0" max="100" value="30">
       </div>
 
-      <div class="ctrl-group" style="border-bottom:none;">
+      <div class="ctrl-group">
         <div class="ctrl-label">
           <span class="name">DODGE &amp; BURN <span class="jp-small">覆い焼き・焼き込み</span></span>
           <span class="val" id="dodgeBurnVal">25%</span>
         </div>
         <input type="range" id="dodgeBurn" min="0" max="100" value="25">
+      </div>
+
+      <div class="ctrl-group" style="border-bottom:none;">
+        <div class="ctrl-label">
+          <span class="name">LIGHT LEAK <span class="jp-small">光線引き込み</span></span>
+          <span class="val" id="lightLeakVal">0%</span>
+        </div>
+        <input type="range" id="lightLeak" min="0" max="100" value="0">
       </div>
 
       <div class="ctrl-group" style="border-bottom:none;">

@@ -1,5 +1,5 @@
-// ── Silver Gelatin エフェクトエンジン（k-eis DESIGN FILTER 00-β・個人用/非公開）
-// 白黒写真だけが持つ、伝統的な暗室の語彙を扱う7系統のパラメータ:
+// ── Silver Gelatin エフェクトエンジン（k-eis DESIGN FILTER 006・Tone Prism(005)に続く公開作品）
+// 白黒写真だけが持つ、伝統的な暗室の語彙を扱う8系統のパラメータ:
 // 01 FILTER       → 撮影時の色フィルター（赤・黄・緑・オレンジ）。空の濃淡や肌の質感が変わる
 // 02 TONAL CURVE  → 階調構造（BLACK/SHADOW/MIDTONE/HIGHLIGHT/WHITEの5点カーブ）
 // 03 PAPER GRADE  → 印画紙のコントラスト（軟調0号〜硬調5号相当）
@@ -7,12 +7,18 @@
 // 05 DETAIL       → 解像感（アンシャープマスク）
 // 06 TONE         → 調色（セピア・セレニウム・シアノタイプ）
 // 07 DODGE&BURN   → 覆い焼き・焼き込み（中心を明るく、周辺を暗く）
+// 08 LIGHT LEAK   → 光線引き込み（画面端から暖色が滲む。位置は決定論的で毎回同じ）
 //
-// CAMERA と FILM STOCK は独立した軸で、掛け合わせて使える
-//   CAMERA     → FILTER/TONAL CURVE(HIGHLIGHT・WHITE)/DETAIL/PAPER GRADE/DODGE&BURNを担当
-//                Leica M Monochrom / Ricoh GR
+// CAMERA・FILM STOCK・PAPER TYPEは独立した3つの軸で、それぞれ掛け合わせて使える
+//   CAMERA     → FILTER/TONAL CURVE(HIGHLIGHT・WHITE)/DETAIL/PAPER GRADE/DODGE&BURN/LIGHT LEAKを担当
+//                Leica M Monochrom / Ricoh GR / Canon 7 Dream Lens / Nikon FM2 / Holga
 //   FILM STOCK → TONAL CURVE(BLACK・SHADOW・MIDTONE)/GRAIN(量・粒の大きさ)を担当
 //                Kodak Tri-X 400 / Ilford HP5 Plus / Ilford Delta 100
+//   PAPER TYPE → PAPER GRADE/GRAIN/TONE/DODGE&BURNを、印画紙の"仕上げ"として最後に乗せる
+//                Fiber Base / Lith Print
+//
+// パッチ（CAMERA/FILM STOCK/PAPER TYPE）切替時は自動でCOMPARE MODEが働き、
+// 旧設定→新設定を2秒ずつ交互表示する（連打時は前の表示を即キャンセル）
 
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
@@ -31,6 +37,7 @@ const grainSlider = document.getElementById('grain');
 const detailSlider = document.getElementById('detail');
 const toneStrengthSlider = document.getElementById('toneStrength');
 const dodgeBurnSlider = document.getElementById('dodgeBurn');
+const lightLeakSlider = document.getElementById('lightLeak');
 
 const filterStrengthVal = document.getElementById('filterStrengthVal');
 const tcBlackVal = document.getElementById('tcBlackVal');
@@ -43,6 +50,7 @@ const grainVal = document.getElementById('grainVal');
 const detailVal = document.getElementById('detailVal');
 const toneStrengthVal = document.getElementById('toneStrengthVal');
 const dodgeBurnVal = document.getElementById('dodgeBurnVal');
+const lightLeakVal = document.getElementById('lightLeakVal');
 
 const filterBtns = document.querySelectorAll('#filterGrid .select-btn');
 const toneBtns = document.querySelectorAll('#toneGrid .select-btn');
@@ -56,6 +64,9 @@ const resetBtn = document.getElementById('resetBtn');
 let currentFilter = 'none';
 let currentTone = 'none';
 let currentGrainSize = 1; // FILM STOCKの粒の大きさ（1=最も細かい/デジタル的、大きいほど粗い有機的な粒に）
+let currentCameraKey = 'none';
+let currentFilmKey = 'none';
+let compareTimers = [];
 let originalImage = null;
 let originalImageData = null;
 let previewImageData = null;
@@ -189,42 +200,44 @@ const CAMERAS = {
   none: {
     filter: 'none', filterStrength: 70,
     tc: { highlight: 50, white: 50 },
-    detail: 25, paperGrade: 50, dodgeBurn: 25
+    detail: 25, paperGrade: 50, dodgeBurn: 25, lightLeak: 0
   },
   // Leica M Monochrom：カラーフィルターアレイのない専用センサー。撮って出しは黒が浅め・
   // ハイライトが飛びやすく"おとなしい"（後処理で生きる）のが実機レビューでの評価
   leicaMMono: {
     filter: 'yellow', filterStrength: 20,
     tc: { highlight: 44, white: 45 },
-    detail: 65, paperGrade: 48, dodgeBurn: 10
+    detail: 65, paperGrade: 48, dodgeBurn: 10, lightLeak: 0
   },
   // Ricoh GR：シャドウを潰しハイライトで魅せる"ハイコントラスト白黒"設定が定番。
   // シャープネス・クラリティ・周辺減光（Shading）を強めに焼き込むスナップシューター的な硬さ
   ricohGR: {
     filter: 'red', filterStrength: 20,
     tc: { highlight: 52, white: 50 },
-    detail: 55, paperGrade: 55, dodgeBurn: 42
+    detail: 55, paperGrade: 55, dodgeBurn: 42, lightLeak: 0
   },
-  // Canon 7 + 50mm f/0.95「ドリームレンズ」：開放時の球面収差由来のもや・ソフトネス、
-  // かなり強い周辺減光が持ち味。絞ればシャープになるレンズだが、個性は開放時にある
+  // Canon 7 + 50mm f/0.95「ドリームレンズ」：開放時は球面収差由来のもや・コントラスト低下と
+  // グロウが持ち味だが、複数のレビューで「中心はきちんとシャープ」と一貫していたため、
+  // 解像感そのものは大きく削らず、もや・低コントラスト・強めの周辺減光で個性を表現
   dreamLens: {
     filter: 'none', filterStrength: 0,
     tc: { highlight: 42, white: 40 },
-    detail: 8, paperGrade: 38, dodgeBurn: 65
+    detail: 30, paperGrade: 42, dodgeBurn: 55, lightLeak: 0
   },
   // Nikon FM2 + Nikkor 50mm：突出した個性がないことこそが個性の、標準35mm一眼レフ。
   // 中心・周辺ともに高いシャープネス、素直な階調が実機レビューで一貫していた
   fm2: {
     filter: 'yellow', filterStrength: 25,
     tc: { highlight: 50, white: 50 },
-    detail: 45, paperGrade: 50, dodgeBurn: 15
+    detail: 45, paperGrade: 50, dodgeBurn: 15, lightLeak: 0
   },
   // Holga：プラスチックのメニスカスレンズによる、画面全体が均一に甘いソフトフォーカス。
-  // Dream Lensとは違い"中心も含めて総崩れ"、トンネル状の強い周辺減光が特徴
+  // Dream Lensとは違い"中心も含めて総崩れ"、トンネル状の強い周辺減光が特徴。
+  // 実機レビューで最頻出のキーワードだったLIGHT LEAKも、Holgaだけの個性として持たせる
   holga: {
     filter: 'none', filterStrength: 0,
     tc: { highlight: 54, white: 52 },
-    detail: 3, paperGrade: 58, dodgeBurn: 80
+    detail: 3, paperGrade: 58, dodgeBurn: 80, lightLeak: 45
   }
 };
 
@@ -252,9 +265,80 @@ const FILM_STOCKS = {
   }
 };
 
+// ── COMPARE MODE：パッチ切替時に旧設定→新設定を2秒ずつ交互表示する。連打時は前の表示を即キャンセル
+function clearCompareTimers() {
+  compareTimers.forEach(id => clearTimeout(id));
+  compareTimers = [];
+}
+
+function getAllParams() {
+  return {
+    filter: currentFilter, filterStrength: filterStrengthSlider.value,
+    tcBlack: tcBlackSlider.value, tcShadow: tcShadowSlider.value, tcMidtone: tcMidtoneSlider.value,
+    tcHighlight: tcHighlightSlider.value, tcWhite: tcWhiteSlider.value,
+    paperGrade: paperGradeSlider.value, grain: grainSlider.value, grainSize: currentGrainSize,
+    detail: detailSlider.value,
+    tone: currentTone, toneStrength: toneStrengthSlider.value,
+    dodgeBurn: dodgeBurnSlider.value, lightLeak: lightLeakSlider.value
+  };
+}
+
+function setAllParams(p) {
+  currentFilter = p.filter;
+  filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === p.filter));
+  filterStrengthSlider.value = p.filterStrength; filterStrengthVal.textContent = p.filterStrength + '%';
+
+  tcBlackSlider.value = p.tcBlack; tcBlackVal.textContent = p.tcBlack + '%';
+  tcShadowSlider.value = p.tcShadow; tcShadowVal.textContent = p.tcShadow + '%';
+  tcMidtoneSlider.value = p.tcMidtone; tcMidtoneVal.textContent = p.tcMidtone + '%';
+  tcHighlightSlider.value = p.tcHighlight; tcHighlightVal.textContent = p.tcHighlight + '%';
+  tcWhiteSlider.value = p.tcWhite; tcWhiteVal.textContent = p.tcWhite + '%';
+
+  paperGradeSlider.value = p.paperGrade;
+  const pg = parseInt(p.paperGrade);
+  paperGradeVal.textContent = pg===50 ? '中間（2号相当）' : (pg<50 ? `軟調-${50-pg}` : `硬調+${pg-50}`);
+
+  grainSlider.value = p.grain; grainVal.textContent = p.grain + '%';
+  currentGrainSize = p.grainSize;
+
+  detailSlider.value = p.detail; detailVal.textContent = p.detail + '%';
+
+  currentTone = p.tone;
+  toneBtns.forEach(b => b.classList.toggle('active', b.dataset.tone === p.tone));
+  toneStrengthSlider.value = p.toneStrength; toneStrengthVal.textContent = p.toneStrength + '%';
+
+  dodgeBurnSlider.value = p.dodgeBurn; dodgeBurnVal.textContent = p.dodgeBurn + '%';
+  lightLeakSlider.value = p.lightLeak; lightLeakVal.textContent = p.lightLeak + '%';
+}
+
+function runCompare(oldParams, newParams) {
+  clearCompareTimers();
+  if (!originalImageData) {
+    setAllParams(newParams);
+    return;
+  }
+  setAllParams(oldParams);
+  canvasBadge.textContent = 'BEFORE';
+  canvasBadge.style.display = 'block';
+  applySilverGelatin(false);
+
+  const t1 = setTimeout(() => {
+    setAllParams(newParams);
+    canvasBadge.textContent = 'AFTER';
+    applySilverGelatin(false);
+    const t2 = setTimeout(() => {
+      canvasBadge.style.display = 'none';
+    }, 2000);
+    compareTimers.push(t2);
+  }, 2000);
+  compareTimers.push(t1);
+}
+
 function applyCamera(key) {
   const c = CAMERAS[key];
   if (!c) return;
+  const oldParams = getAllParams();
+  currentCameraKey = key;
 
   currentFilter = c.filter;
   filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === c.filter));
@@ -271,13 +355,16 @@ function applyCamera(key) {
   paperGradeVal.textContent = pg===50 ? '中間（2号相当）' : (pg<50 ? `軟調-${50-pg}` : `硬調+${pg-50}`);
 
   dodgeBurnSlider.value = c.dodgeBurn; dodgeBurnVal.textContent = c.dodgeBurn + '%';
+  lightLeakSlider.value = c.lightLeak; lightLeakVal.textContent = c.lightLeak + '%';
 
-  requestApply();
+  runCompare(oldParams, getAllParams());
 }
 
 function applyFilm(key) {
   const f = FILM_STOCKS[key];
   if (!f) return;
+  const oldParams = getAllParams();
+  currentFilmKey = key;
 
   tcBlackSlider.value = f.tc.black; tcBlackVal.textContent = f.tc.black + '%';
   tcShadowSlider.value = f.tc.shadow; tcShadowVal.textContent = f.tc.shadow + '%';
@@ -286,12 +373,14 @@ function applyFilm(key) {
   grainSlider.value = f.grain; grainVal.textContent = f.grain + '%';
   currentGrainSize = f.grainSize;
 
-  requestApply();
+  runCompare(oldParams, getAllParams());
 }
 
 // ── PAPER TYPE：印画紙そのものの個性。TONAL CURVEはCAMERA/FILM STOCKが担当済みなので触らず、
-// PAPER GRADE（コントラスト）・GRAIN・TONEだけを、指定されたフィールドがある時だけ上書きする
-// （＝暗室の最終工程として、カメラ/フィルムの設定の上から"仕上げ"を乗せるイメージ）
+// PAPER GRADE（コントラスト）・GRAIN・TONE・DODGE&BURNだけを、指定されたフィールドがある時だけ上書きする
+// （＝暗室の最終工程として、カメラ/フィルムの設定の上から"仕上げ"を乗せるイメージ）。
+// フィールドを指定しないpaper typeは、そこを触らず"今選ばれているCAMERA/FILM STOCKの値"に戻す
+// （Lith Printで上書きしたgrain/tone/dodgeBurnが標準やFiber Baseに切り替えても残り続けるのを防ぐため）
 const PAPER_TYPES = {
   standard: { paperGrade: 50 },
   // Fiber Base：深い黒・豊かな階調分離が持ち味の高級印画紙
@@ -305,22 +394,38 @@ const PAPER_TYPES = {
 function applyPaperType(key) {
   const p = PAPER_TYPES[key];
   if (!p) return;
+  const oldParams = getAllParams();
+
+  const film = FILM_STOCKS[currentFilmKey] || FILM_STOCKS.none;
+  const camera = CAMERAS[currentCameraKey] || CAMERAS.none;
 
   if (p.paperGrade !== undefined) {
     paperGradeSlider.value = p.paperGrade;
     const pg = p.paperGrade;
     paperGradeVal.textContent = pg===50 ? '中間（2号相当）' : (pg<50 ? `軟調-${50-pg}` : `硬調+${pg-50}`);
   }
+
   if (p.grain !== undefined) { grainSlider.value = p.grain; grainVal.textContent = p.grain + '%'; }
+  else { grainSlider.value = film.grain; grainVal.textContent = film.grain + '%'; }
+
   if (p.grainSize !== undefined) { currentGrainSize = p.grainSize; }
+  else { currentGrainSize = film.grainSize; }
+
   if (p.tone !== undefined) {
     currentTone = p.tone;
     toneBtns.forEach(b => b.classList.toggle('active', b.dataset.tone === p.tone));
+  } else {
+    currentTone = 'none';
+    toneBtns.forEach(b => b.classList.toggle('active', b.dataset.tone === 'none'));
   }
-  if (p.toneStrength !== undefined) { toneStrengthSlider.value = p.toneStrength; toneStrengthVal.textContent = p.toneStrength + '%'; }
-  if (p.dodgeBurn !== undefined) { dodgeBurnSlider.value = p.dodgeBurn; dodgeBurnVal.textContent = p.dodgeBurn + '%'; }
 
-  requestApply();
+  if (p.toneStrength !== undefined) { toneStrengthSlider.value = p.toneStrength; toneStrengthVal.textContent = p.toneStrength + '%'; }
+  else { toneStrengthSlider.value = 0; toneStrengthVal.textContent = '0%'; }
+
+  if (p.dodgeBurn !== undefined) { dodgeBurnSlider.value = p.dodgeBurn; dodgeBurnVal.textContent = p.dodgeBurn + '%'; }
+  else { dodgeBurnSlider.value = camera.dodgeBurn; dodgeBurnVal.textContent = camera.dodgeBurn + '%'; }
+
+  runCompare(oldParams, getAllParams());
 }
 
 cameraBtns.forEach(btn => {
@@ -502,6 +607,27 @@ function applySilverGelatin(preview) {
     }
   }
 
+  // ── STEP 6: LIGHT LEAK（光線引き込み。画面端から暖色が滲む。位置は毎回同じ＝決定論的）
+  const lightLeak = parseInt(lightLeakSlider.value) / 100;
+  if (lightLeak > 0.01) {
+    const lx = w * 0.85, ly = h * 0.12;
+    const maxDist = Math.sqrt(w*w + h*h) * 0.55;
+    const leakColor = [255, 150, 60];
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const dx = x - lx, dy = y - ly;
+        const dist = Math.sqrt(dx*dx + dy*dy) / maxDist;
+        const wgt = Math.max(0, 1 - dist);
+        if (wgt <= 0) continue;
+        const amt = wgt * wgt * lightLeak;
+        const i = (y*w+x)*4;
+        out[i]   = out[i]   * (1-amt) + leakColor[0] * amt;
+        out[i+1] = out[i+1] * (1-amt) + leakColor[1] * amt;
+        out[i+2] = out[i+2] * (1-amt) + leakColor[2] * amt;
+      }
+    }
+  }
+
   const resultData = new ImageData(out, w, h);
 
   if (preview && previewImageData) {
@@ -517,7 +643,7 @@ function applySilverGelatin(preview) {
 }
 
 // ── UIイベント
-const allSliders = [filterStrengthSlider, tcBlackSlider, tcShadowSlider, tcMidtoneSlider, tcHighlightSlider, tcWhiteSlider, paperGradeSlider, grainSlider, detailSlider, toneStrengthSlider, dodgeBurnSlider];
+const allSliders = [filterStrengthSlider, tcBlackSlider, tcShadowSlider, tcMidtoneSlider, tcHighlightSlider, tcWhiteSlider, paperGradeSlider, grainSlider, detailSlider, toneStrengthSlider, dodgeBurnSlider, lightLeakSlider];
 allSliders.forEach(slider => {
   slider.addEventListener('pointerdown', () => { isDragging = true; });
   slider.addEventListener('touchstart', () => { isDragging = true; }, { passive: true });
@@ -550,6 +676,7 @@ grainSlider.addEventListener('input', () => { grainVal.textContent = grainSlider
 detailSlider.addEventListener('input', () => { detailVal.textContent = detailSlider.value + '%'; requestApply(); });
 toneStrengthSlider.addEventListener('input', () => { toneStrengthVal.textContent = toneStrengthSlider.value + '%'; requestApply(); });
 dodgeBurnSlider.addEventListener('input', () => { dodgeBurnVal.textContent = dodgeBurnSlider.value + '%'; requestApply(); });
+lightLeakSlider.addEventListener('input', () => { lightLeakVal.textContent = lightLeakSlider.value + '%'; requestApply(); });
 
 filterBtns.forEach(btn => {
   btn.addEventListener('click', () => {
