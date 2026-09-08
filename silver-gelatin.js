@@ -221,8 +221,8 @@ const CAMERAS = {
   // 解像感そのものは大きく削らず、もや・低コントラスト・強めの周辺減光で個性を表現
   dreamLens: {
     filter: 'none', filterStrength: 0,
-    tc: { highlight: 42, white: 40 },
-    detail: 30, paperGrade: 42, dodgeBurn: 55, lightLeak: 0
+    tc: { highlight: 45, white: 44 },
+    detail: 42, paperGrade: 48, dodgeBurn: 45, lightLeak: 0
   },
   // Nikon FM2 + Nikkor 50mm：突出した個性がないことこそが個性の、標準35mm一眼レフ。
   // 中心・周辺ともに高いシャープネス、素直な階調が実機レビューで一貫していた
