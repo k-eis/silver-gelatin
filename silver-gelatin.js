@@ -203,6 +203,27 @@ const CAMERAS = {
     filter: 'red', filterStrength: 20,
     tc: { highlight: 52, white: 50 },
     detail: 55, paperGrade: 55, dodgeBurn: 42
+  },
+  // Canon 7 + 50mm f/0.95「ドリームレンズ」：開放時の球面収差由来のもや・ソフトネス、
+  // かなり強い周辺減光が持ち味。絞ればシャープになるレンズだが、個性は開放時にある
+  dreamLens: {
+    filter: 'none', filterStrength: 0,
+    tc: { highlight: 42, white: 40 },
+    detail: 8, paperGrade: 38, dodgeBurn: 65
+  },
+  // Nikon FM2 + Nikkor 50mm：突出した個性がないことこそが個性の、標準35mm一眼レフ。
+  // 中心・周辺ともに高いシャープネス、素直な階調が実機レビューで一貫していた
+  fm2: {
+    filter: 'yellow', filterStrength: 25,
+    tc: { highlight: 50, white: 50 },
+    detail: 45, paperGrade: 50, dodgeBurn: 15
+  },
+  // Holga：プラスチックのメニスカスレンズによる、画面全体が均一に甘いソフトフォーカス。
+  // Dream Lensとは違い"中心も含めて総崩れ"、トンネル状の強い周辺減光が特徴
+  holga: {
+    filter: 'none', filterStrength: 0,
+    tc: { highlight: 54, white: 52 },
+    detail: 3, paperGrade: 58, dodgeBurn: 80
   }
 };
 
