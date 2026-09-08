@@ -54,6 +54,7 @@ const lightLeakVal = document.getElementById('lightLeakVal');
 
 const filterBtns = document.querySelectorAll('#filterGrid .select-btn');
 const toneBtns = document.querySelectorAll('#toneGrid .select-btn');
+const compareModeToggle = document.getElementById('compareModeToggle');
 const cameraBtns = document.querySelectorAll('#cameraGrid .select-btn');
 const filmBtns = document.querySelectorAll('#filmGrid .select-btn');
 const paperTypeBtns = document.querySelectorAll('#paperTypeGrid .select-btn');
@@ -317,21 +318,43 @@ function runCompare(oldParams, newParams) {
     setAllParams(newParams);
     return;
   }
-  setAllParams(oldParams);
-  canvasBadge.textContent = 'BEFORE';
-  canvasBadge.style.display = 'block';
+
+  // まず新設定を即座に反映（体感速度優先）
+  setAllParams(newParams);
+  canvasBadge.style.display = 'none';
   applySilverGelatin(false);
 
-  const t1 = setTimeout(() => {
+  if (!compareModeToggle.checked) return; // OFF：ここで終了、比較演出はなし
+
+  // ON：0.5秒後から、変更前後を2秒ずつ・計10往復交互表示してから新設定に落ち着く
+  const maxCycles = 10;
+  let cycle = 0;
+
+  function showOld() {
+    setAllParams(oldParams);
+    canvasBadge.textContent = 'BEFORE';
+    canvasBadge.style.display = 'block';
+    applySilverGelatin(false);
+    const t = setTimeout(showNew, 2000);
+    compareTimers.push(t);
+  }
+  function showNew() {
     setAllParams(newParams);
     canvasBadge.textContent = 'AFTER';
+    canvasBadge.style.display = 'block';
     applySilverGelatin(false);
-    const t2 = setTimeout(() => {
-      canvasBadge.style.display = 'none';
-    }, 2000);
-    compareTimers.push(t2);
-  }, 2000);
-  compareTimers.push(t1);
+    cycle++;
+    if (cycle < maxCycles) {
+      const t = setTimeout(showOld, 2000);
+      compareTimers.push(t);
+    } else {
+      const t = setTimeout(() => { canvasBadge.style.display = 'none'; }, 500);
+      compareTimers.push(t);
+    }
+  }
+
+  const t0 = setTimeout(showOld, 500);
+  compareTimers.push(t0);
 }
 
 function applyCamera(key) {
