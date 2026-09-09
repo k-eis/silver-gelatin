@@ -268,6 +268,33 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
           <span class="val" id="lightLeakVal">0%</span>
         </div>
         <input type="range" id="lightLeak" min="0" max="100" value="0">
+
+        <div class="ctrl-label" style="margin-bottom:8px; margin-top:14px;">
+          <span class="name" style="font-size:9px; color:var(--muted);">PATTERN <span class="jp-small">形状</span></span>
+        </div>
+        <div class="select-grid" id="lightLeakPatternGrid" style="grid-template-columns: 1fr 1fr 1fr;">
+          <div class="select-btn active" data-leak-pattern="circular">Circular</div>
+          <div class="select-btn" data-leak-pattern="top">Top</div>
+          <div class="select-btn" data-leak-pattern="bottom">Bottom</div>
+          <div class="select-btn" data-leak-pattern="left">Left</div>
+          <div class="select-btn" data-leak-pattern="right">Right</div>
+        </div>
+
+        <div class="ctrl-label" style="margin-bottom:4px; margin-top:12px;">
+          <span class="name" style="font-size:9px; color:var(--muted);">POSITION X <span class="jp-small">円形時のみ</span></span>
+          <span class="val" id="lightLeakPosXVal">85%</span>
+        </div>
+        <input type="range" id="lightLeakPosX" min="0" max="100" value="85">
+        <div class="ctrl-label" style="margin-bottom:4px; margin-top:10px;">
+          <span class="name" style="font-size:9px; color:var(--muted);">POSITION Y <span class="jp-small">円形時のみ</span></span>
+          <span class="val" id="lightLeakPosYVal">12%</span>
+        </div>
+        <input type="range" id="lightLeakPosY" min="0" max="100" value="12">
+        <div class="ctrl-label" style="margin-bottom:4px; margin-top:10px;">
+          <span class="name" style="font-size:9px; color:var(--muted);">RANGE <span class="jp-small">効果の範囲</span></span>
+          <span class="val" id="lightLeakRangeVal">32%</span>
+        </div>
+        <input type="range" id="lightLeakRange" min="10" max="100" value="32">
       </div>
 
       <div class="ctrl-group" style="border-bottom:none;">

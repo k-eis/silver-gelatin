@@ -7,7 +7,7 @@
 // 05 DETAIL       → 解像感（アンシャープマスク）
 // 06 TONE         → 調色（セピア・セレニウム・シアノタイプ）
 // 07 DODGE&BURN   → 覆い焼き・焼き込み（中心を明るく、周辺を暗く）
-// 08 LIGHT LEAK   → 光線引き込み（画面端から暖色が滲む。位置は決定論的で毎回同じ）
+// 08 LIGHT LEAK   → 光線引き込み（白の滲み。PATTERN:円形/上下左右のグラデーション、POSITION、RANGEを調整可能）
 //
 // CAMERA・FILM STOCK・PAPER TYPEは独立した3つの軸で、それぞれ掛け合わせて使える
 //   CAMERA     → FILTER/TONAL CURVE(HIGHLIGHT・WHITE)/DETAIL/PAPER GRADE/DODGE&BURN/LIGHT LEAKを担当
@@ -38,6 +38,10 @@ const detailSlider = document.getElementById('detail');
 const toneStrengthSlider = document.getElementById('toneStrength');
 const dodgeBurnSlider = document.getElementById('dodgeBurn');
 const lightLeakSlider = document.getElementById('lightLeak');
+const lightLeakPosXSlider = document.getElementById('lightLeakPosX');
+const lightLeakPosYSlider = document.getElementById('lightLeakPosY');
+const lightLeakRangeSlider = document.getElementById('lightLeakRange');
+const lightLeakPatternBtns = document.querySelectorAll('#lightLeakPatternGrid .select-btn');
 
 const filterStrengthVal = document.getElementById('filterStrengthVal');
 const tcBlackVal = document.getElementById('tcBlackVal');
@@ -51,6 +55,9 @@ const detailVal = document.getElementById('detailVal');
 const toneStrengthVal = document.getElementById('toneStrengthVal');
 const dodgeBurnVal = document.getElementById('dodgeBurnVal');
 const lightLeakVal = document.getElementById('lightLeakVal');
+const lightLeakPosXVal = document.getElementById('lightLeakPosXVal');
+const lightLeakPosYVal = document.getElementById('lightLeakPosYVal');
+const lightLeakRangeVal = document.getElementById('lightLeakRangeVal');
 
 const filterBtns = document.querySelectorAll('#filterGrid .select-btn');
 const toneBtns = document.querySelectorAll('#toneGrid .select-btn');
@@ -65,6 +72,7 @@ const resetBtn = document.getElementById('resetBtn');
 let currentFilter = 'none';
 let currentTone = 'none';
 let currentGrainSize = 1; // FILM STOCKの粒の大きさ（1=最も細かい/デジタル的、大きいほど粗い有機的な粒に）
+let currentLeakPattern = 'circular'; // LIGHT LEAKの形状（circular/top/bottom/left/right）
 let currentCameraKey = 'none';
 let currentFilmKey = 'none';
 let compareTimers = [];
@@ -631,23 +639,49 @@ function applySilverGelatin(preview) {
     }
   }
 
-  // ── STEP 6: LIGHT LEAK（光線引き込み。画面端から暖色が滲む。位置は毎回同じ＝決定論的）
+  // ── STEP 6: LIGHT LEAK（光線引き込み。パターン・位置・範囲は調整可能、決定論的）
   const lightLeak = parseInt(lightLeakSlider.value) / 100;
   if (lightLeak > 0.01) {
-    const lx = w * 0.85, ly = h * 0.12;
-    const maxDist = Math.sqrt(w*w + h*h) * 0.32;
-    const leakColor = [255, 195, 130];
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const dx = x - lx, dy = y - ly;
-        const dist = Math.sqrt(dx*dx + dy*dy) / maxDist;
-        const wgt = Math.max(0, 1 - dist);
-        if (wgt <= 0) continue;
-        const amt = wgt * wgt * wgt * lightLeak;
-        const i = (y*w+x)*4;
-        out[i]   = out[i]   * (1-amt) + leakColor[0] * amt;
-        out[i+1] = out[i+1] * (1-amt) + leakColor[1] * amt;
-        out[i+2] = out[i+2] * (1-amt) + leakColor[2] * amt;
+    const leakColor = [255, 255, 255];
+    const range = Math.max(0.05, parseInt(lightLeakRangeSlider.value) / 100);
+
+    if (currentLeakPattern === 'circular') {
+      const lx = w * (parseInt(lightLeakPosXSlider.value) / 100);
+      const ly = h * (parseInt(lightLeakPosYSlider.value) / 100);
+      const maxDist = Math.sqrt(w*w + h*h) * range;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const dx = x - lx, dy = y - ly;
+          const dist = Math.sqrt(dx*dx + dy*dy) / maxDist;
+          const wgt = Math.max(0, 1 - dist);
+          if (wgt <= 0) continue;
+          const amt = wgt * wgt * wgt * lightLeak;
+          const i = (y*w+x)*4;
+          out[i]   = out[i]   * (1-amt) + leakColor[0] * amt;
+          out[i+1] = out[i+1] * (1-amt) + leakColor[1] * amt;
+          out[i+2] = out[i+2] * (1-amt) + leakColor[2] * amt;
+        }
+      }
+    } else {
+      // 上/下/左/右からの方向性のあるグラデーション
+      const span = (currentLeakPattern === 'top' || currentLeakPattern === 'bottom')
+        ? Math.max(4, h * range)
+        : Math.max(4, w * range);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          let d;
+          if (currentLeakPattern === 'top') d = y;
+          else if (currentLeakPattern === 'bottom') d = (h - 1 - y);
+          else if (currentLeakPattern === 'left') d = x;
+          else d = (w - 1 - x); // right
+          const wgt = Math.max(0, 1 - d / span);
+          if (wgt <= 0) continue;
+          const amt = wgt * wgt * lightLeak;
+          const i = (y*w+x)*4;
+          out[i]   = out[i]   * (1-amt) + leakColor[0] * amt;
+          out[i+1] = out[i+1] * (1-amt) + leakColor[1] * amt;
+          out[i+2] = out[i+2] * (1-amt) + leakColor[2] * amt;
+        }
       }
     }
   }
@@ -667,7 +701,7 @@ function applySilverGelatin(preview) {
 }
 
 // ── UIイベント
-const allSliders = [filterStrengthSlider, tcBlackSlider, tcShadowSlider, tcMidtoneSlider, tcHighlightSlider, tcWhiteSlider, paperGradeSlider, grainSlider, detailSlider, toneStrengthSlider, dodgeBurnSlider, lightLeakSlider];
+const allSliders = [filterStrengthSlider, tcBlackSlider, tcShadowSlider, tcMidtoneSlider, tcHighlightSlider, tcWhiteSlider, paperGradeSlider, grainSlider, detailSlider, toneStrengthSlider, dodgeBurnSlider, lightLeakSlider, lightLeakPosXSlider, lightLeakPosYSlider, lightLeakRangeSlider];
 allSliders.forEach(slider => {
   slider.addEventListener('pointerdown', () => { isDragging = true; });
   slider.addEventListener('touchstart', () => { isDragging = true; }, { passive: true });
@@ -701,6 +735,17 @@ detailSlider.addEventListener('input', () => { detailVal.textContent = detailSli
 toneStrengthSlider.addEventListener('input', () => { toneStrengthVal.textContent = toneStrengthSlider.value + '%'; requestApply(); });
 dodgeBurnSlider.addEventListener('input', () => { dodgeBurnVal.textContent = dodgeBurnSlider.value + '%'; requestApply(); });
 lightLeakSlider.addEventListener('input', () => { lightLeakVal.textContent = lightLeakSlider.value + '%'; requestApply(); });
+lightLeakPosXSlider.addEventListener('input', () => { lightLeakPosXVal.textContent = lightLeakPosXSlider.value + '%'; requestApply(); });
+lightLeakPosYSlider.addEventListener('input', () => { lightLeakPosYVal.textContent = lightLeakPosYSlider.value + '%'; requestApply(); });
+lightLeakRangeSlider.addEventListener('input', () => { lightLeakRangeVal.textContent = lightLeakRangeSlider.value + '%'; requestApply(); });
+lightLeakPatternBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    lightLeakPatternBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentLeakPattern = btn.dataset.leakPattern;
+    requestApply();
+  });
+});
 
 filterBtns.forEach(btn => {
   btn.addEventListener('click', () => {
