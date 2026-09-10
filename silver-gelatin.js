@@ -61,6 +61,7 @@ const lightLeakRangeVal = document.getElementById('lightLeakRangeVal');
 
 const filterBtns = document.querySelectorAll('#filterGrid .select-btn');
 const toneBtns = document.querySelectorAll('#toneGrid .select-btn');
+const freeModeToggle = document.getElementById('freeModeToggle');
 const compareModeToggle = document.getElementById('compareModeToggle');
 const cameraBtns = document.querySelectorAll('#cameraGrid .select-btn');
 const filmBtns = document.querySelectorAll('#filmGrid .select-btn');
@@ -75,6 +76,7 @@ let currentGrainSize = 1; // FILM STOCKの粒の大きさ（1=最も細かい/�
 let currentLeakPattern = 'circular'; // LIGHT LEAKの形状（circular/top/bottom/left/right）
 let currentCameraKey = 'none';
 let currentFilmKey = 'none';
+let currentPaperTypeKey = 'standard';
 let compareTimers = [];
 let originalImage = null;
 let originalImageData = null;
@@ -372,22 +374,26 @@ function applyCamera(key) {
   const oldParams = getAllParams();
   currentCameraKey = key;
 
-  currentFilter = c.filter;
-  filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === c.filter));
-  filterStrengthSlider.value = c.filterStrength;
-  filterStrengthVal.textContent = c.filterStrength + '%';
+  if (freeModeToggle.checked) {
+    currentFilter = c.filter;
+    filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === c.filter));
+    filterStrengthSlider.value = c.filterStrength;
+    filterStrengthVal.textContent = c.filterStrength + '%';
 
-  tcHighlightSlider.value = c.tc.highlight; tcHighlightVal.textContent = c.tc.highlight + '%';
-  tcWhiteSlider.value = c.tc.white; tcWhiteVal.textContent = c.tc.white + '%';
+    tcHighlightSlider.value = c.tc.highlight; tcHighlightVal.textContent = c.tc.highlight + '%';
+    tcWhiteSlider.value = c.tc.white; tcWhiteVal.textContent = c.tc.white + '%';
 
-  detailSlider.value = c.detail; detailVal.textContent = c.detail + '%';
+    detailSlider.value = c.detail; detailVal.textContent = c.detail + '%';
 
-  paperGradeSlider.value = c.paperGrade;
-  const pg = c.paperGrade;
-  paperGradeVal.textContent = pg===50 ? '中間（2号相当）' : (pg<50 ? `軟調-${50-pg}` : `硬調+${pg-50}`);
+    paperGradeSlider.value = c.paperGrade;
+    const pg = c.paperGrade;
+    paperGradeVal.textContent = pg===50 ? '中間（2号相当）' : (pg<50 ? `軟調-${50-pg}` : `硬調+${pg-50}`);
 
-  dodgeBurnSlider.value = c.dodgeBurn; dodgeBurnVal.textContent = c.dodgeBurn + '%';
-  lightLeakSlider.value = c.lightLeak; lightLeakVal.textContent = c.lightLeak + '%';
+    dodgeBurnSlider.value = c.dodgeBurn; dodgeBurnVal.textContent = c.dodgeBurn + '%';
+    lightLeakSlider.value = c.lightLeak; lightLeakVal.textContent = c.lightLeak + '%';
+  } else {
+    applyFullSnapFields();
+  }
 
   runCompare(oldParams, getAllParams());
 }
@@ -398,12 +404,16 @@ function applyFilm(key) {
   const oldParams = getAllParams();
   currentFilmKey = key;
 
-  tcBlackSlider.value = f.tc.black; tcBlackVal.textContent = f.tc.black + '%';
-  tcShadowSlider.value = f.tc.shadow; tcShadowVal.textContent = f.tc.shadow + '%';
-  tcMidtoneSlider.value = f.tc.midtone; tcMidtoneVal.textContent = f.tc.midtone + '%';
+  if (freeModeToggle.checked) {
+    tcBlackSlider.value = f.tc.black; tcBlackVal.textContent = f.tc.black + '%';
+    tcShadowSlider.value = f.tc.shadow; tcShadowVal.textContent = f.tc.shadow + '%';
+    tcMidtoneSlider.value = f.tc.midtone; tcMidtoneVal.textContent = f.tc.midtone + '%';
 
-  grainSlider.value = f.grain; grainVal.textContent = f.grain + '%';
-  currentGrainSize = f.grainSize;
+    grainSlider.value = f.grain; grainVal.textContent = f.grain + '%';
+    currentGrainSize = f.grainSize;
+  } else {
+    applyFullSnapFields();
+  }
 
   runCompare(oldParams, getAllParams());
 }
@@ -423,39 +433,82 @@ const PAPER_TYPES = {
   lith: { paperGrade: 88, grain: 70, grainSize: 2.2, tone: 'sepia', toneStrength: 30, dodgeBurn: 45 }
 };
 
+// ── FREE MODEがOFF（デフォルト）の時に使う、CAMERA/FILM STOCK/PAPER TYPEの
+// 現在選択中3つをまとめて再適用する関数。マニュアルでいじったスライダー値を全部リセットする
+function applyFullSnapFields() {
+  const c = CAMERAS[currentCameraKey] || CAMERAS.none;
+  const f = FILM_STOCKS[currentFilmKey] || FILM_STOCKS.none;
+  const p = PAPER_TYPES[currentPaperTypeKey] || PAPER_TYPES.standard;
+
+  currentFilter = c.filter;
+  filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === c.filter));
+  filterStrengthSlider.value = c.filterStrength;
+  filterStrengthVal.textContent = c.filterStrength + '%';
+
+  tcHighlightSlider.value = c.tc.highlight; tcHighlightVal.textContent = c.tc.highlight + '%';
+  tcWhiteSlider.value = c.tc.white; tcWhiteVal.textContent = c.tc.white + '%';
+  tcBlackSlider.value = f.tc.black; tcBlackVal.textContent = f.tc.black + '%';
+  tcShadowSlider.value = f.tc.shadow; tcShadowVal.textContent = f.tc.shadow + '%';
+  tcMidtoneSlider.value = f.tc.midtone; tcMidtoneVal.textContent = f.tc.midtone + '%';
+
+  detailSlider.value = c.detail; detailVal.textContent = c.detail + '%';
+  lightLeakSlider.value = c.lightLeak; lightLeakVal.textContent = c.lightLeak + '%';
+
+  const grainValue = (p.grain !== undefined) ? p.grain : f.grain;
+  grainSlider.value = grainValue; grainVal.textContent = grainValue + '%';
+  currentGrainSize = (p.grainSize !== undefined) ? p.grainSize : f.grainSize;
+
+  const pg = p.paperGrade;
+  paperGradeSlider.value = pg;
+  paperGradeVal.textContent = pg===50 ? '中間（2号相当）' : (pg<50 ? `軟調-${50-pg}` : `硬調+${pg-50}`);
+
+  currentTone = (p.tone !== undefined) ? p.tone : 'none';
+  toneBtns.forEach(b => b.classList.toggle('active', b.dataset.tone === currentTone));
+  const tStrength = (p.toneStrength !== undefined) ? p.toneStrength : 0;
+  toneStrengthSlider.value = tStrength; toneStrengthVal.textContent = tStrength + '%';
+
+  const db = (p.dodgeBurn !== undefined) ? p.dodgeBurn : c.dodgeBurn;
+  dodgeBurnSlider.value = db; dodgeBurnVal.textContent = db + '%';
+}
+
 function applyPaperType(key) {
   const p = PAPER_TYPES[key];
   if (!p) return;
   const oldParams = getAllParams();
+  currentPaperTypeKey = key;
 
-  const film = FILM_STOCKS[currentFilmKey] || FILM_STOCKS.none;
-  const camera = CAMERAS[currentCameraKey] || CAMERAS.none;
+  if (freeModeToggle.checked) {
+    const film = FILM_STOCKS[currentFilmKey] || FILM_STOCKS.none;
+    const camera = CAMERAS[currentCameraKey] || CAMERAS.none;
 
-  if (p.paperGrade !== undefined) {
-    paperGradeSlider.value = p.paperGrade;
-    const pg = p.paperGrade;
-    paperGradeVal.textContent = pg===50 ? '中間（2号相当）' : (pg<50 ? `軟調-${50-pg}` : `硬調+${pg-50}`);
-  }
+    if (p.paperGrade !== undefined) {
+      paperGradeSlider.value = p.paperGrade;
+      const pg = p.paperGrade;
+      paperGradeVal.textContent = pg===50 ? '中間（2号相当）' : (pg<50 ? `軟調-${50-pg}` : `硬調+${pg-50}`);
+    }
 
-  if (p.grain !== undefined) { grainSlider.value = p.grain; grainVal.textContent = p.grain + '%'; }
-  else { grainSlider.value = film.grain; grainVal.textContent = film.grain + '%'; }
+    if (p.grain !== undefined) { grainSlider.value = p.grain; grainVal.textContent = p.grain + '%'; }
+    else { grainSlider.value = film.grain; grainVal.textContent = film.grain + '%'; }
 
-  if (p.grainSize !== undefined) { currentGrainSize = p.grainSize; }
-  else { currentGrainSize = film.grainSize; }
+    if (p.grainSize !== undefined) { currentGrainSize = p.grainSize; }
+    else { currentGrainSize = film.grainSize; }
 
-  if (p.tone !== undefined) {
-    currentTone = p.tone;
-    toneBtns.forEach(b => b.classList.toggle('active', b.dataset.tone === p.tone));
+    if (p.tone !== undefined) {
+      currentTone = p.tone;
+      toneBtns.forEach(b => b.classList.toggle('active', b.dataset.tone === p.tone));
+    } else {
+      currentTone = 'none';
+      toneBtns.forEach(b => b.classList.toggle('active', b.dataset.tone === 'none'));
+    }
+
+    if (p.toneStrength !== undefined) { toneStrengthSlider.value = p.toneStrength; toneStrengthVal.textContent = p.toneStrength + '%'; }
+    else { toneStrengthSlider.value = 0; toneStrengthVal.textContent = '0%'; }
+
+    if (p.dodgeBurn !== undefined) { dodgeBurnSlider.value = p.dodgeBurn; dodgeBurnVal.textContent = p.dodgeBurn + '%'; }
+    else { dodgeBurnSlider.value = camera.dodgeBurn; dodgeBurnVal.textContent = camera.dodgeBurn + '%'; }
   } else {
-    currentTone = 'none';
-    toneBtns.forEach(b => b.classList.toggle('active', b.dataset.tone === 'none'));
+    applyFullSnapFields();
   }
-
-  if (p.toneStrength !== undefined) { toneStrengthSlider.value = p.toneStrength; toneStrengthVal.textContent = p.toneStrength + '%'; }
-  else { toneStrengthSlider.value = 0; toneStrengthVal.textContent = '0%'; }
-
-  if (p.dodgeBurn !== undefined) { dodgeBurnSlider.value = p.dodgeBurn; dodgeBurnVal.textContent = p.dodgeBurn + '%'; }
-  else { dodgeBurnSlider.value = camera.dodgeBurn; dodgeBurnVal.textContent = camera.dodgeBurn + '%'; }
 
   runCompare(oldParams, getAllParams());
 }

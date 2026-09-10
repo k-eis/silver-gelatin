@@ -134,6 +134,13 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
     <div class="controls">
       <div class="ctrl-group">
         <label class="ctrl-label" style="cursor:pointer; margin-bottom:0;">
+          <span class="name">FREE MODE <span class="jp-small">パッチ間を自由に行き来（OFF=押すたびその数値に戻る）</span></span>
+          <input type="checkbox" id="freeModeToggle" style="width:16px; height:16px; accent-color:var(--accent);">
+        </label>
+      </div>
+
+      <div class="ctrl-group">
+        <label class="ctrl-label" style="cursor:pointer; margin-bottom:0;">
           <span class="name">COMPARE MODE <span class="jp-small">2秒×10回、変更前後を交互表示</span></span>
           <input type="checkbox" id="compareModeToggle" style="width:16px; height:16px; accent-color:var(--accent);">
         </label>
@@ -143,11 +150,11 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
         <div class="ctrl-label"><span class="name">CAMERA <span class="jp-small">センサー・エンジンの個性</span></span></div>
         <div class="select-grid" id="cameraGrid" style="grid-template-columns: 1fr 1fr;">
           <div class="select-btn active" data-camera="none">初期化</div>
-          <div class="select-btn" data-camera="leicaMMono">Leica M Monochrom</div>
-          <div class="select-btn" data-camera="ricohGR">Ricoh GR</div>
-          <div class="select-btn" data-camera="dreamLens">Canon 7 Dream Lens</div>
-          <div class="select-btn" data-camera="fm2">Nikon FM2</div>
-          <div class="select-btn" data-camera="holga">Holga</div>
+          <div class="select-btn" data-camera="leicaMMono">M Mono</div>
+          <div class="select-btn" data-camera="ricohGR">R Sharp</div>
+          <div class="select-btn" data-camera="dreamLens">Dream Lens</div>
+          <div class="select-btn" data-camera="fm2">Steady Eye</div>
+          <div class="select-btn" data-camera="holga">Toy Blur</div>
         </div>
       </div>
 
