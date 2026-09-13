@@ -295,32 +295,39 @@ function getAllParams() {
   };
 }
 
+// ── 共通ヘルパー：スライダーと表示ラベルを1行で更新する（Optical Lineageで使った書き方を移植）
+function setSlider(slider, valEl, value, display) {
+  slider.value = value;
+  valEl.textContent = (display !== undefined) ? display : value + '%';
+}
+function paperGradeLabel(pg) {
+  return pg===50 ? '中間（2号相当）' : (pg<50 ? `軟調-${50-pg}` : `硬調+${pg-50}`);
+}
+
 function setAllParams(p) {
   currentFilter = p.filter;
   filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === p.filter));
-  filterStrengthSlider.value = p.filterStrength; filterStrengthVal.textContent = p.filterStrength + '%';
+  setSlider(filterStrengthSlider, filterStrengthVal, p.filterStrength);
 
-  tcBlackSlider.value = p.tcBlack; tcBlackVal.textContent = p.tcBlack + '%';
-  tcShadowSlider.value = p.tcShadow; tcShadowVal.textContent = p.tcShadow + '%';
-  tcMidtoneSlider.value = p.tcMidtone; tcMidtoneVal.textContent = p.tcMidtone + '%';
-  tcHighlightSlider.value = p.tcHighlight; tcHighlightVal.textContent = p.tcHighlight + '%';
-  tcWhiteSlider.value = p.tcWhite; tcWhiteVal.textContent = p.tcWhite + '%';
+  setSlider(tcBlackSlider, tcBlackVal, p.tcBlack);
+  setSlider(tcShadowSlider, tcShadowVal, p.tcShadow);
+  setSlider(tcMidtoneSlider, tcMidtoneVal, p.tcMidtone);
+  setSlider(tcHighlightSlider, tcHighlightVal, p.tcHighlight);
+  setSlider(tcWhiteSlider, tcWhiteVal, p.tcWhite);
 
-  paperGradeSlider.value = p.paperGrade;
-  const pg = parseInt(p.paperGrade);
-  paperGradeVal.textContent = pg===50 ? '中間（2号相当）' : (pg<50 ? `軟調-${50-pg}` : `硬調+${pg-50}`);
+  setSlider(paperGradeSlider, paperGradeVal, p.paperGrade, paperGradeLabel(parseInt(p.paperGrade)));
 
-  grainSlider.value = p.grain; grainVal.textContent = p.grain + '%';
+  setSlider(grainSlider, grainVal, p.grain);
   currentGrainSize = p.grainSize;
 
-  detailSlider.value = p.detail; detailVal.textContent = p.detail + '%';
+  setSlider(detailSlider, detailVal, p.detail);
 
   currentTone = p.tone;
   toneBtns.forEach(b => b.classList.toggle('active', b.dataset.tone === p.tone));
-  toneStrengthSlider.value = p.toneStrength; toneStrengthVal.textContent = p.toneStrength + '%';
+  setSlider(toneStrengthSlider, toneStrengthVal, p.toneStrength);
 
-  dodgeBurnSlider.value = p.dodgeBurn; dodgeBurnVal.textContent = p.dodgeBurn + '%';
-  lightLeakSlider.value = p.lightLeak; lightLeakVal.textContent = p.lightLeak + '%';
+  setSlider(dodgeBurnSlider, dodgeBurnVal, p.dodgeBurn);
+  setSlider(lightLeakSlider, lightLeakVal, p.lightLeak);
 }
 
 function runCompare(oldParams, newParams) {
@@ -371,28 +378,25 @@ function runCompare(oldParams, newParams) {
 function applyCameraFieldsOnly(c) {
   currentFilter = c.filter;
   filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === c.filter));
-  filterStrengthSlider.value = c.filterStrength;
-  filterStrengthVal.textContent = c.filterStrength + '%';
+  setSlider(filterStrengthSlider, filterStrengthVal, c.filterStrength);
 
-  tcHighlightSlider.value = c.tc.highlight; tcHighlightVal.textContent = c.tc.highlight + '%';
-  tcWhiteSlider.value = c.tc.white; tcWhiteVal.textContent = c.tc.white + '%';
+  setSlider(tcHighlightSlider, tcHighlightVal, c.tc.highlight);
+  setSlider(tcWhiteSlider, tcWhiteVal, c.tc.white);
 
-  detailSlider.value = c.detail; detailVal.textContent = c.detail + '%';
+  setSlider(detailSlider, detailVal, c.detail);
 
-  paperGradeSlider.value = c.paperGrade;
-  const pg = c.paperGrade;
-  paperGradeVal.textContent = pg===50 ? '中間（2号相当）' : (pg<50 ? `軟調-${50-pg}` : `硬調+${pg-50}`);
+  setSlider(paperGradeSlider, paperGradeVal, c.paperGrade, paperGradeLabel(c.paperGrade));
 
-  dodgeBurnSlider.value = c.dodgeBurn; dodgeBurnVal.textContent = c.dodgeBurn + '%';
-  lightLeakSlider.value = c.lightLeak; lightLeakVal.textContent = c.lightLeak + '%';
+  setSlider(dodgeBurnSlider, dodgeBurnVal, c.dodgeBurn);
+  setSlider(lightLeakSlider, lightLeakVal, c.lightLeak);
 }
 
 function applyFilmFieldsOnly(f) {
-  tcBlackSlider.value = f.tc.black; tcBlackVal.textContent = f.tc.black + '%';
-  tcShadowSlider.value = f.tc.shadow; tcShadowVal.textContent = f.tc.shadow + '%';
-  tcMidtoneSlider.value = f.tc.midtone; tcMidtoneVal.textContent = f.tc.midtone + '%';
+  setSlider(tcBlackSlider, tcBlackVal, f.tc.black);
+  setSlider(tcShadowSlider, tcShadowVal, f.tc.shadow);
+  setSlider(tcMidtoneSlider, tcMidtoneVal, f.tc.midtone);
 
-  grainSlider.value = f.grain; grainVal.textContent = f.grain + '%';
+  setSlider(grainSlider, grainVal, f.grain);
   currentGrainSize = f.grainSize;
 }
 
@@ -401,13 +405,11 @@ function applyPaperFieldsOnly(p) {
   const camera = CAMERAS[currentCameraKey] || CAMERAS.none;
 
   if (p.paperGrade !== undefined) {
-    paperGradeSlider.value = p.paperGrade;
-    const pg = p.paperGrade;
-    paperGradeVal.textContent = pg===50 ? '中間（2号相当）' : (pg<50 ? `軟調-${50-pg}` : `硬調+${pg-50}`);
+    setSlider(paperGradeSlider, paperGradeVal, p.paperGrade, paperGradeLabel(p.paperGrade));
   }
 
-  if (p.grain !== undefined) { grainSlider.value = p.grain; grainVal.textContent = p.grain + '%'; }
-  else { grainSlider.value = film.grain; grainVal.textContent = film.grain + '%'; }
+  if (p.grain !== undefined) { setSlider(grainSlider, grainVal, p.grain); }
+  else { setSlider(grainSlider, grainVal, film.grain); }
 
   if (p.grainSize !== undefined) { currentGrainSize = p.grainSize; }
   else { currentGrainSize = film.grainSize; }
@@ -420,11 +422,11 @@ function applyPaperFieldsOnly(p) {
     toneBtns.forEach(b => b.classList.toggle('active', b.dataset.tone === 'none'));
   }
 
-  if (p.toneStrength !== undefined) { toneStrengthSlider.value = p.toneStrength; toneStrengthVal.textContent = p.toneStrength + '%'; }
-  else { toneStrengthSlider.value = 0; toneStrengthVal.textContent = '0%'; }
+  if (p.toneStrength !== undefined) { setSlider(toneStrengthSlider, toneStrengthVal, p.toneStrength); }
+  else { setSlider(toneStrengthSlider, toneStrengthVal, 0); }
 
-  if (p.dodgeBurn !== undefined) { dodgeBurnSlider.value = p.dodgeBurn; dodgeBurnVal.textContent = p.dodgeBurn + '%'; }
-  else { dodgeBurnSlider.value = camera.dodgeBurn; dodgeBurnVal.textContent = camera.dodgeBurn + '%'; }
+  if (p.dodgeBurn !== undefined) { setSlider(dodgeBurnSlider, dodgeBurnVal, p.dodgeBurn); }
+  else { setSlider(dodgeBurnSlider, dodgeBurnVal, camera.dodgeBurn); }
 }
 
 // ── STANDARD MODE（FREE MODE OFF）：各パッチは自分の担当範囲だけ更新。
